@@ -14,7 +14,8 @@ jobs:
 
       # secrets.yaml is git-ignored; provide a stub so ESPHome can parse the config.
       - name: Create CI secrets
-        run: printf 'ota_password: "ci-placeholder"\n' > secrets.yaml
+        run: |
+          echo 'ota_password: ci-placeholder' > secrets.yaml
 
       - uses: esphome/build-action@v6
         with:
