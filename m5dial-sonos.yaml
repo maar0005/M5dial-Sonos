@@ -47,19 +47,58 @@ substitutions:
 esphome:
   name: "${device_name}"
   friendly_name: "${friendly_name}"
+  # Appends the last 3 bytes of the MAC to the device hostname so multiple
+  # dials on the same network get unique names (e.g. sonos-dial-a1b2c3).
+  name_add_mac_suffix: true
+  # Security header — per-device key generation via ESP32 hardware RNG.
+  # Must be in the same folder as this YAML file.
+  includes:
+    - m5dial_security.h
+
   on_boot:
-    # Priority 200 — runs after Wi-Fi + API connect, before user scripts
-    priority: 200
-    then:
-      - lambda: |-
-          id(current_mode)    = 0;
-          id(playlist_index)  = 0;
-          id(playlist_count)  = 0;
-          id(current_volume)  = 0.0f;
-          id(is_playing)      = false;
-      - script.execute: wake_screen
-      # Show the playlist page immediately on boot
-      - lvgl.page.show: page_playlist
+    # ── Priority 400 — BEFORE the API server starts ─────────────────────────
+    # Load (or generate on first boot) the per-device Noise PSK and install it
+    # into the API server.  Any connection attempt before this point would be
+    # rejected because the placeholder key is not the real one.
+    - priority: 400
+      then:
+        - lambda: |-
+            std::string key = ensure_device_key();
+            if (key.size() == 44) {
+              auto psk = key_to_psk(key);
+              id(my_api)->set_noise_psk(psk);   // Install real key before API starts
+              id(device_key)  = key;
+              id(device_code) = derive_display_code(key);
+              ESP_LOGI("security", "Device key loaded, ID: %s",
+                       id(device_code).c_str());
+            } else {
+              ESP_LOGE("security", "Key generation failed — device unusable");
+            }
+
+    # ── Priority 200 — after Wi-Fi has attempted to connect ─────────────────
+    - priority: 200
+      then:
+        - lambda: |-
+            id(current_mode)    = 0;
+            id(playlist_index)  = 0;
+            id(playlist_count)  = 0;
+            id(current_volume)  = 0.0f;
+            id(is_playing)      = false;
+        # Update the device code label on the setup page (key was set at priority 400)
+        - lvgl.label.update:
+            id: lbl_device_code
+            text: !lambda 'return id(device_code);'
+        # Also update the Setup Key sensor so HA shows the correct value immediately
+        - component.update: ts_setup_key
+        - script.execute: wake_screen
+        # Show setup page if no Wi-Fi; playlist page if already connected
+        - if:
+            condition:
+              wifi.connected:
+            then:
+              - lvgl.page.show: page_playlist
+            else:
+              - lvgl.page.show: page_setup
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -77,26 +116,48 @@ esp32:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # WI-FI
+# No ssid/password — Wi-Fi credentials are provisioned at runtime via
+# improv_serial (USB) or the captive-portal hotspot.
+# Previously stored credentials are loaded from NVS automatically on boot.
 # ─────────────────────────────────────────────────────────────────────────────
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
-  # Fallback AP so you can still reach the device if Wi-Fi is misconfigured
+  # Open fallback AP for provisioning.  Password left blank so any phone can
+  # connect without needing to share a passphrase.
   ap:
-    ssid: "${friendly_name} Fallback"
-    password: "sonosdial123"
+    ssid: "${friendly_name} Setup"
+    password: ""
+  # Switch to the main UI page once Wi-Fi connects after provisioning/reboot
+  on_connected:
+    then:
+      - lvgl.page.show: page_playlist
 
 captive_portal:
+
+# Improv Wi-Fi — allows provisioning via USB serial using a web browser
+# (https://www.improv-wifi.com).  Works alongside the captive portal.
+improv_serial:
+
+# Built-in web server — exposes all HA entities including the Setup Key.
+# After provisioning, visit http://<device-ip>/ to copy the Setup Key.
+web_server:
+  port: 80
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HOME ASSISTANT API
+# id: my_api — required so the on_boot lambda can call set_noise_psk().
+# The placeholder key below is overwritten at boot priority 400 with the
+# per-device key loaded from NVS.  No API connection is possible with the
+# placeholder, so the real key is always installed before any client connects.
 # homeassistant_states: true is REQUIRED for text_sensor platform: homeassistant
 # to receive entity attribute updates.
 # ─────────────────────────────────────────────────────────────────────────────
 api:
+  id: my_api
   encryption:
-    key: !secret api_encryption_key
+    # Placeholder — 44 base64 chars for 32 zero-bytes.
+    # Replaced at runtime in on_boot priority 400 before API accepts connections.
+    key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
   homeassistant_states: true
 
 
@@ -288,6 +349,20 @@ globals:
     restore_value: false
     initial_value: '""'
 
+  # ── Security globals (set at boot priority 400 by m5dial_security.h) ─────
+  # Full 44-char base64 API key — exposed via the Setup Key text_sensor.
+  - id: device_key
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+
+  # 6-char uppercase identifier derived from the key — shown on the display
+  # during setup so the user can identify which device they are pairing.
+  - id: device_code
+    type: std::string
+    restore_value: false
+    initial_value: '"------"'
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DISPLAY — GC9A01A 240×240 round, SPI
@@ -318,6 +393,68 @@ lvgl:
   bg_color:    0x1A1A1A
 
   pages:
+
+    # ── PAGE SETUP: PROVISIONING ─────────────────────────────────────────────
+    # Shown on first boot (no Wi-Fi) and after factory reset.
+    # Guides the user through Wi-Fi provisioning and HA pairing.
+    # Switches to page_playlist automatically via wifi.on_connected above.
+    - id: page_setup
+      bg_color: 0x1A1A1A
+      widgets:
+        # Header
+        - label:
+            text: "SETUP"
+            align: CENTER
+            y: -88
+            text_font: font_24
+            text_color: 0xFF9500
+
+        # Wi-Fi provisioning instruction
+        - label:
+            text: "Join Wi-Fi hotspot:"
+            align: CENTER
+            y: -58
+            text_font: font_14
+            text_color: 0xAAAAAA
+
+        # AP SSID the device broadcasts
+        - label:
+            text: "${friendly_name} Setup"
+            align: CENTER
+            y: -36
+            text_font: font_16
+            text_color: 0xFFFFFF
+
+        # Divider hint
+        - label:
+            text: "then open web page"
+            align: CENTER
+            y: -8
+            text_font: font_14
+            text_color: 0xAAAAAA
+
+        - label:
+            text: "for API Setup Key"
+            align: CENTER
+            y: 12
+            text_font: font_14
+            text_color: 0xAAAAAA
+
+        # Device identifier — updated at boot from device_code global
+        - label:
+            text: "ID:"
+            align: CENTER
+            y: 42
+            text_font: font_14
+            text_color: 0x666666
+
+        - label:
+            id: lbl_device_code
+            text: "------"
+            align: CENTER
+            y: 62
+            text_font: font_24
+            text_color: 0xFF9500
 
     # ── PAGE 0: PLAYLIST ────────────────────────────────────────────────────
     - id: page_playlist
@@ -763,6 +900,55 @@ text_sensor:
               - lvgl.label.update:
                   id: lbl_play_icon
                   text: "▶"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SETUP KEY — Exposes the per-device API key to Home Assistant and the web UI.
+# Copy this value from the HA entity (or from http://<device-ip>/) and paste
+# it into the ESPHome device entry in HA when prompted for the encryption key.
+# ─────────────────────────────────────────────────────────────────────────────
+text_sensor:
+  - platform: template
+    id: ts_setup_key
+    name: "${friendly_name} Setup Key"
+    icon: "mdi:key-variant"
+    entity_category: diagnostic
+    # Returns the 44-char base64 key loaded/generated at boot priority 400
+    lambda: 'return id(device_key);'
+    update_interval: never   # Only pushed on boot and after factory reset
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FACTORY RESET BUTTON
+# Generates a brand-new device key and installs it as the active Noise PSK.
+# After pressing this button:
+#   1. The Setup Key entity shows the new key.
+#   2. HA will lose connection (old key no longer valid).
+#   3. Re-add the device in HA using the new key shown in the entity/web page.
+# ─────────────────────────────────────────────────────────────────────────────
+button:
+  - platform: template
+    name: "${friendly_name} Factory Reset"
+    icon: "mdi:lock-reset"
+    entity_category: config
+    on_press:
+      then:
+        - lambda: |-
+            std::string key = generate_device_key();
+            nvs_save_device_key(key);
+            id(device_key)  = key;
+            id(device_code) = derive_display_code(key);
+            auto psk = key_to_psk(key);
+            id(my_api)->set_noise_psk(psk);   // Install new key immediately
+            ESP_LOGW("security", "Factory reset — new device ID: %s",
+                     id(device_code).c_str());
+        # Refresh the Setup Key entity so HA sees the new value
+        - component.update: ts_setup_key
+        # Show setup page and update the device code label on the display
+        - lvgl.page.show: page_setup
+        - lvgl.label.update:
+            id: lbl_device_code
+            text: !lambda 'return id(device_code);'
 
 
 # ─────────────────────────────────────────────────────────────────────────────
