@@ -122,11 +122,11 @@ esp32:
     type: esp-idf
   flash_size: 8MB
 
-# The M5Dial has 8 MB OPI PSRAM wired to the ESP32-S3.
+# The M5Dial PSRAM is wired as Quad SPI (not Octal) on this hardware revision.
 # With IDF framework the psram: component maps directly to CONFIG_SPIRAM_* so
 # initialisation is reliable across IDF versions.
 psram:
-  mode: octal
+  mode: quad
   speed: 80MHz
 
 
