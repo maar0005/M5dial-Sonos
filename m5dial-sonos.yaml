@@ -420,11 +420,12 @@ display:
     cs_pin:    GPIO7
     dc_pin:    GPIO4
     reset_pin: GPIO8
-    rotation:  0
-    color_order: bgr
     invert_colors: true
     update_interval: never
     auto_clear_enabled: false   # Required for LVGL — prevents ESPHome clearing the buffer
+    dimensions:
+      height: 240
+      width: 240
 
 
 # ─────────────────────────────────────────────────────────────────────────────
