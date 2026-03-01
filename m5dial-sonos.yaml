@@ -61,6 +61,7 @@ esphome:
   # Must be in the same folder as this YAML file.
   includes:
     - m5dial_security.h
+    - dsps_fft2r_platform.h   # stub: disables JPEGDEC S3 SIMD (esp-dsp not on path with Arduino framework)
 
   on_boot:
     # ── Priority 400 — BEFORE the API server starts ─────────────────────────
