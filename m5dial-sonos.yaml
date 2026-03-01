@@ -146,10 +146,12 @@ captive_portal:
 # (https://www.improv-wifi.com).  Works alongside the captive portal.
 improv_serial:
 
-# Built-in web server — exposes all HA entities including the Setup Key.
-# After provisioning, visit http://<device-ip>/ to copy the Setup Key.
+# Minimal web server — OTA upload only; no log streaming, no entity list.
 web_server:
   port: 80
+  log: false
+  ota: true
+  include_internal: false
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -214,7 +216,7 @@ ota:
 # Change level to DEBUG when troubleshooting display or Sonos attribute issues.
 # ─────────────────────────────────────────────────────────────────────────────
 logger:
-  level: INFO
+  level: DEBUG    # Set to DEBUG to confirm display buffer allocation succeeds
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -420,6 +422,7 @@ display:
     cs_pin:    GPIO7
     dc_pin:    GPIO4
     reset_pin: GPIO8
+    color_palette: 8BIT        # 8-bit (RGB332) buffer = 57 KB; 16-bit = 113 KB → OOM without PSRAM
     invert_colors: true
     update_interval: never
     auto_clear_enabled: false   # Required for LVGL — prevents ESPHome clearing the buffer
