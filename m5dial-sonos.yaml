@@ -109,11 +109,9 @@ esphome:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PLATFORM — ESP32-S3, 8 MB flash, IDF framework
-# IDF framework gives direct sdkconfig control over OPI PSRAM, which is
-# required for the LVGL framebuffer (115 KB) and online_image album-art
-# buffer (115 KB).  Arduino + IDF 5.x no longer reliably initialises OPI
-# PSRAM through the ESPHome psram: component.
+# PLATFORM — ESP32-S3FN8, 8 MB flash, IDF framework
+# The M5StampS3 uses ESP32-S3FN8: 8 MB flash, NO PSRAM.
+# All buffers must fit in the 512 KB internal SRAM alongside WiFi + IDF.
 # ─────────────────────────────────────────────────────────────────────────────
 esp32:
   board: esp32-s3-devkitc-1
@@ -121,13 +119,6 @@ esp32:
   framework:
     type: esp-idf
   flash_size: 8MB
-
-# The M5Dial PSRAM is wired as Quad SPI (not Octal) on this hardware revision.
-# With IDF framework the psram: component maps directly to CONFIG_SPIRAM_* so
-# initialisation is reliable across IDF versions.
-psram:
-  mode: quad
-  speed: 80MHz
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -172,15 +163,16 @@ http_request:
 # ─────────────────────────────────────────────────────────────────────────────
 # ALBUM ART — Fetched from HA media_player_proxy over HTTP.
 # The entity_picture text_sensor (below) calls set_url() + update() each time
-# the track changes.  A 64 KB buffer covers typical 240×240 JPEG art.
+# the track changes.  Image is stored at 120×120 (28 KB) and zoomed 2× by
+# LVGL to fill the screen — avoids the 115 KB full-size decode without PSRAM.
 # ─────────────────────────────────────────────────────────────────────────────
 online_image:
   - id: album_art_img
     url: "http://localhost/placeholder.jpg"   # Placeholder — replaced on first entity_picture update; on_error handles the initial 404
     format: JPEG
     type: RGB565         # 16-bit colour — matches display color_depth: 16
-    resize: 240x240      # Scale to fill the round display
-    buffer_size: 65536   # 64 KB
+    resize: 120x120      # Decoded size: 120×120×2 = 28 KB (fits in internal SRAM)
+    buffer_size: 32768   # 32 KB — sufficient for a 120×120 JPEG download
     on_error:
       then:
         - logger.log:
@@ -443,6 +435,9 @@ lvgl:
     - round_display
   color_depth: 16
   bg_color:    0x1A1A1A
+  # Partial render buffer: 25% of screen = 60 rows × 240 × 2 B = 28 KB.
+  # Avoids the full 115 KB framebuffer that requires PSRAM.
+  buffer_size: 25%
 
   pages:
 
@@ -584,6 +579,9 @@ lvgl:
             id: lbl_album_art
             src: album_art_img
             align: CENTER
+            zoom: 512      # 2× — scales 120×120 stored image to fill 240×240
+            pivot_x: 60   # Zoom around image centre so it stays centred
+            pivot_y: 60
 
         # ── Dark bottom strip — improves text contrast over busy artwork ──
         # 80 px tall, fully black, 70 % opacity.
