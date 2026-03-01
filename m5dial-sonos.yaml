@@ -442,9 +442,9 @@ lvgl:
     - round_display
   color_depth: 16
   bg_color:    0x1A1A1A
-  # Partial render buffer: 12% of screen = ~14 KB.
-  # 25% causes a bootloop regression in some ESPHome 2025.x builds.
-  buffer_size: 12%
+  # Partial render buffer: 10% of screen = ~11.5 KB.
+  # Reduced from 12% to free ~3 KB for JPEG decoder allocation.
+  buffer_size: 10%
 
   pages:
 
