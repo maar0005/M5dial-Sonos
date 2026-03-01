@@ -579,7 +579,7 @@ lvgl:
             id: lbl_album_art
             src: album_art_img
             align: CENTER
-            zoom: 512      # 2× — scales 120×120 stored image to fill 240×240
+            zoom: 2.0      # 2× — scales 120×120 stored image to fill 240×240
             pivot_x: 60   # Zoom around image centre so it stays centred
             pivot_y: 60
 
