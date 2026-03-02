@@ -97,18 +97,10 @@ esp32:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
-  # Open fallback AP if the configured network is unreachable.
-  ap:
-    ssid: "${friendly_name} Setup"
-    password: ""
   # Switch to the main UI page once Wi-Fi connects after provisioning/reboot
   on_connect:
     then:
       - lvgl.page.show: page_playlist
-
-# Improv Wi-Fi — allows provisioning via USB serial using a web browser
-# (https://www.improv-wifi.com).
-improv_serial:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HTTP CLIENT + ALBUM ART — temporarily disabled to free ~60 KB heap
@@ -359,37 +351,19 @@ lvgl:
     - id: page_setup
       bg_color: 0x1A1A1A
       widgets:
-        # Header
         - label:
             text: "SETUP"
             align: CENTER
-            y: -60
+            y: -40
             text_font: font_24
             text_color: 0xFF9500
 
-        # USB provisioning instruction
         - label:
-            text: "Connect USB to configure"
-            align: CENTER
-            y: -20
-            text_font: font_14
-            text_color: 0xAAAAAA
-
-        # Wi-Fi fallback hint
-        - label:
-            text: "or join Wi-Fi:"
+            text: "Connecting to Wi-Fi..."
             align: CENTER
             y: 10
-            text_font: font_14
-            text_color: 0xAAAAAA
-
-        # AP SSID the device broadcasts
-        - label:
-            text: "${friendly_name} Setup"
-            align: CENTER
-            y: 36
             text_font: font_16
-            text_color: 0xFFFFFF
+            text_color: 0xAAAAAA
 
     # ── PAGE 0: PLAYLIST ────────────────────────────────────────────────────
     - id: page_playlist
