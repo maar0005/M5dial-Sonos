@@ -404,24 +404,21 @@ globals:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DISPLAY — GC9A01A 240×240 round, SPI
-# bgr + invert_colors corrects the panel's native colour mapping on M5Dial.
-# update_interval: never → LVGL drives all redraws; no draw lambda needed.
+# DISPLAY — GC9A01A 240×240 round, MIPI SPI
+# Switched from ili9xxx to mipi_spi — different (native) init sequence.
 # ─────────────────────────────────────────────────────────────────────────────
 display:
-  - platform: ili9xxx
-    model: gc9a01a
+  - platform: mipi_spi
+    model: GC9A01A
     id: round_display
     cs_pin:    GPIO7
     dc_pin:    GPIO4
     reset_pin: GPIO8
-    show_test_card: true       # DIAGNOSTIC — shows color bars. Remove after testing.
+    color_order: bgr
     invert_colors: true
-    update_interval: 1s        # DIAGNOSTIC — test_card needs the draw loop. Restore to 'never' after.
-    auto_clear_enabled: false   # Required for LVGL — prevents ESPHome clearing the buffer
-    dimensions:
-      height: 240
-      width: 240
+    update_interval: never     # LVGL drives all redraws
+    auto_clear_enabled: false
+    dimensions: 240x240
 
 
 # ─────────────────────────────────────────────────────────────────────────────
