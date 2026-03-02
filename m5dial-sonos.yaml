@@ -58,33 +58,7 @@ esphome:
   name_add_mac_suffix: false
   platformio_options:
     board_build.flash_mode: dio
-  # Security header — per-device key generation via ESP32 hardware RNG.
-  # Must be in the same folder as this YAML file.
-  includes:
-    - m5dial_security.h
-    - dsps_fft2r_platform.h   # stub: disables JPEGDEC S3 SIMD path (shadows real esp-dsp header)
-
   on_boot:
-    # ── Priority 400 — BEFORE the API server starts ─────────────────────────
-    # Load (or generate on first boot) the per-device Noise PSK and install it
-    # into the API server.  Any connection attempt before this point would be
-    # rejected because the placeholder key is not the real one.
-    - priority: 400
-      then:
-        - lambda: |-
-            std::string key = ensure_device_key();
-            if (key.size() == 44) {
-              auto psk = key_to_psk(key);
-              id(my_api)->set_noise_psk(psk);   // Install real key before API starts
-              id(device_key)  = key;
-              id(device_code) = derive_display_code(key);
-              ESP_LOGI("security", "Device key loaded, ID: %s",
-                       id(device_code).c_str());
-            } else {
-              ESP_LOGE("security", "Key generation failed — device unusable");
-            }
-
-    # ── Priority 200 — after Wi-Fi has attempted to connect ─────────────────
     - priority: 200
       then:
         - lambda: |-
@@ -93,12 +67,6 @@ esphome:
             id(playlist_count)  = 0;
             id(current_volume)  = 0.0f;
             id(is_playing)      = false;
-        # Update the device code label on the setup page (key was set at priority 400)
-        - lvgl.label.update:
-            id: lbl_device_code
-            text: !lambda 'return id(device_code);'
-        # Also update the Setup Key sensor so HA shows the correct value immediately
-        - component.update: ts_setup_key
         - script.execute: wake_screen
         # Show setup page if no Wi-Fi; playlist page if already connected
         - if:
@@ -123,8 +91,8 @@ esp32:
 # ─────────────────────────────────────────────────────────────────────────────
 # WI-FI
 # No ssid/password — Wi-Fi credentials are provisioned at runtime via
-# improv_serial (USB) or the captive-portal hotspot.
-# Previously stored credentials are loaded from NVS automatically on boot.
+# improv_serial (USB).  Previously stored credentials are loaded from NVS
+# automatically on boot.
 # ─────────────────────────────────────────────────────────────────────────────
 wifi:
   # Open fallback AP for provisioning.  Password left blank so any phone can
@@ -137,18 +105,9 @@ wifi:
     then:
       - lvgl.page.show: page_playlist
 
-captive_portal:
-
 # Improv Wi-Fi — allows provisioning via USB serial using a web browser
-# (https://www.improv-wifi.com).  Works alongside the captive portal.
+# (https://www.improv-wifi.com).
 improv_serial:
-
-# Minimal web server — no log streaming, no entity list.
-web_server:
-  port: 80
-  log: false
-  include_internal: false
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HTTP CLIENT + ALBUM ART — temporarily disabled to free ~60 KB heap
@@ -176,29 +135,11 @@ web_server:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HOME ASSISTANT API
-# id: my_api — required so the on_boot lambda can call set_noise_psk().
-# The placeholder key below is overwritten at boot priority 400 with the
-# per-device key loaded from NVS.  No API connection is possible with the
-# placeholder, so the real key is always installed before any client connects.
 # homeassistant_states: true is REQUIRED for text_sensor platform: homeassistant
 # to receive entity attribute updates.
 # ─────────────────────────────────────────────────────────────────────────────
 api:
-  id: my_api
-  encryption:
-    # Placeholder — 44 base64 chars for 32 zero-bytes.
-    # Replaced at runtime in on_boot priority 400 before API accepts connections.
-    key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
   homeassistant_states: true
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# OTA UPDATES
-# ─────────────────────────────────────────────────────────────────────────────
-ota:
-  - platform: esphome
-    password: !secret ota_password
-  - platform: web_server
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -206,7 +147,7 @@ ota:
 # Change level to DEBUG when troubleshooting display or Sonos attribute issues.
 # ─────────────────────────────────────────────────────────────────────────────
 logger:
-  level: DEBUG    # Set to DEBUG to confirm display buffer allocation succeeds
+  level: WARN
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -293,9 +234,6 @@ font:
     glyphs:
       - "\U0000E89F"  # music_note
   - file: "gfonts://Montserrat"
-    id: font_10
-    size: 10
-  - file: "gfonts://Montserrat"
     id: font_14
     size: 14
   - file: "gfonts://Montserrat"
@@ -305,14 +243,8 @@ font:
     id: font_18
     size: 18
   - file: "gfonts://Montserrat"
-    id: font_20
-    size: 20
-  - file: "gfonts://Montserrat"
     id: font_24
     size: 24
-  - file: "gfonts://Montserrat"
-    id: font_28
-    size: 28
   - file: "gfonts://Montserrat"
     id: font_36
     size: 36
@@ -385,106 +317,22 @@ globals:
     restore_value: false
     initial_value: '""'
 
-  # ── Security globals (set at boot priority 400 by m5dial_security.h) ─────
-  # Full 44-char base64 API key — exposed via the Setup Key text_sensor.
-  - id: device_key
-    type: std::string
-    restore_value: false
-    initial_value: '""'
-
-  # 6-char uppercase identifier derived from the key — shown on the display
-  # during setup so the user can identify which device they are pairing.
-  - id: device_code
-    type: std::string
-    restore_value: false
-    initial_value: '"------"'
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DISPLAY — GC9A01A 240×240 round, SPI
-# Uses custom init_sequence from dgaust/esphome gc9a01 component — the
-# built-in ESPHome GC9A01A init is too minimal and omits vendor-specific
-# power/gamma/timing registers required by the M5 Dial panel.
+# Uses the built-in ESPHome GC9A01A model (available since 2025.1).
 # ─────────────────────────────────────────────────────────────────────────────
 display:
   - platform: ili9xxx
-    model: custom
+    model: GC9A01A
     id: round_display
-    dimensions:
-      width: 240
-      height: 240
-    color_order: bgr
-    cs_pin:    GPIO7
-    dc_pin:    GPIO4
+    cs_pin: GPIO7
+    dc_pin: GPIO4
     reset_pin: GPIO8
     invert_colors: true
-    update_interval: never     # LVGL drives all redraws
     auto_clear_enabled: false
-    init_sequence:
-      # ── Inter-register enable ──────────────────────────────────────────────
-      - [0xEF]
-      - [0xEB, 0x14]
-      - [0xFE]
-      - [0xFE]
-      - [0xEB, 0x14]
-      # ── Vendor power/timing registers ──────────────────────────────────────
-      - [0x84, 0x40]
-      - [0x85, 0xFF]
-      - [0x86, 0xFF]
-      - [0x87, 0xFF]
-      - [0x88, 0x0A]
-      - [0x89, 0x21]
-      - [0x8A, 0x00]
-      - [0x8B, 0x80]
-      - [0x8C, 0x01]
-      - [0x8D, 0x01]
-      - [0x8E, 0xFF]
-      - [0x8F, 0xFF]
-      # ── Display function control ───────────────────────────────────────────
-      - [0xB6, 0x00, 0x00]
-      # ── MADCTL + pixel format (ESPHome re-sends after init, included for
-      #    ordering — some vendor regs depend on these being set first) ───────
-      - [0x36, 0x48]
-      - [0x3A, 0x05]
-      # ── Source/gate timing ─────────────────────────────────────────────────
-      - [0x90, 0x08, 0x08, 0x08, 0x08]
-      - [0xBD, 0x06]
-      - [0xBC, 0x00]
-      - [0xFF, 0x60, 0x01, 0x04]
-      # ── Voltage regulators ─────────────────────────────────────────────────
-      - [0xA4, 0x13]
-      - [0xA5, 0x13]
-      - [0xA6, 0x22]
-      - [0xBE, 0x11]
-      - [0x37, 0x10, 0x0E]
-      - [0xDF, 0x21, 0x0C, 0x02]
-      # ── Gamma correction ───────────────────────────────────────────────────
-      - [0xE0, 0x45, 0x09, 0x08, 0x08, 0x26, 0x2A]
-      - [0xE1, 0x43, 0x70, 0x72, 0x36, 0x37, 0x6F]
-      - [0xE2, 0x45, 0x09, 0x08, 0x08, 0x26, 0x2A]
-      - [0xE3, 0x43, 0x70, 0x72, 0x36, 0x37, 0x6F]
-      # ── Power control ──────────────────────────────────────────────────────
-      - [0xED, 0x1B, 0x0B]
-      - [0xAE, 0x77]
-      - [0xCD, 0x63]
-      # ── Gate/source waveform ───────────────────────────────────────────────
-      - [0x70, 0x07, 0x07, 0x04, 0x0E, 0x0F, 0x09, 0x07, 0x08, 0x03]
-      - [0x3F, 0x34]
-      # ── Gate scan timing ───────────────────────────────────────────────────
-      - [0x62, 0x18, 0x0D, 0x71, 0xED, 0x70, 0x70, 0x18, 0x0F, 0x71, 0xEF, 0x70, 0x70]
-      - [0x63, 0x18, 0x11, 0x71, 0xF1, 0x70, 0x70, 0x18, 0x13, 0x71, 0xF3, 0x70, 0x70]
-      - [0x64, 0x28, 0x29, 0xF1, 0x01, 0xF1, 0x00, 0x07]
-      - [0x66, 0x3C, 0x00, 0xCD, 0x67, 0x45, 0x45, 0x10, 0x00, 0x00, 0x00]
-      - [0x67, 0x00, 0x3C, 0x00, 0x00, 0x00, 0x01, 0x54, 0x10, 0x32, 0x98]
-      - [0x74, 0x10, 0x85, 0x80, 0x00, 0x00, 0x4E, 0x00]
-      - [0x98, 0x3E, 0x07]
-      # ── Tearing effect on ──────────────────────────────────────────────────
-      - [0x35]
-      # ── Display inversion on ───────────────────────────────────────────────
-      - [0x21]
-      # ── Sleep out + display on ─────────────────────────────────────────────
-      - [0x11]
-      - [0x29]
+    update_interval: never
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -505,9 +353,8 @@ lvgl:
   pages:
 
     # ── PAGE SETUP: PROVISIONING ─────────────────────────────────────────────
-    # Shown on first boot (no Wi-Fi) and after factory reset.
-    # Guides the user through Wi-Fi provisioning and HA pairing.
-    # Switches to page_playlist automatically via wifi.on_connected above.
+    # Shown on first boot (no Wi-Fi).  Guides the user through provisioning.
+    # Switches to page_playlist automatically via wifi.on_connect above.
     - id: page_setup
       bg_color: 0x1A1A1A
       widgets:
@@ -515,15 +362,23 @@ lvgl:
         - label:
             text: "SETUP"
             align: CENTER
-            y: -88
+            y: -60
             text_font: font_24
             text_color: 0xFF9500
 
-        # Wi-Fi provisioning instruction
+        # USB provisioning instruction
         - label:
-            text: "Join Wi-Fi hotspot:"
+            text: "Connect USB to configure"
             align: CENTER
-            y: -58
+            y: -20
+            text_font: font_14
+            text_color: 0xAAAAAA
+
+        # Wi-Fi fallback hint
+        - label:
+            text: "or join Wi-Fi:"
+            align: CENTER
+            y: 10
             text_font: font_14
             text_color: 0xAAAAAA
 
@@ -531,40 +386,9 @@ lvgl:
         - label:
             text: "${friendly_name} Setup"
             align: CENTER
-            y: -36
+            y: 36
             text_font: font_16
             text_color: 0xFFFFFF
-
-        # Divider hint
-        - label:
-            text: "then open web page"
-            align: CENTER
-            y: -8
-            text_font: font_14
-            text_color: 0xAAAAAA
-
-        - label:
-            text: "for API Setup Key"
-            align: CENTER
-            y: 12
-            text_font: font_14
-            text_color: 0xAAAAAA
-
-        # Device identifier — updated at boot from device_code global
-        - label:
-            text: "ID:"
-            align: CENTER
-            y: 42
-            text_font: font_14
-            text_color: 0x666666
-
-        - label:
-            id: lbl_device_code
-            text: "------"
-            align: CENTER
-            y: 62
-            text_font: font_24
-            text_color: 0xFF9500
 
     # ── PAGE 0: PLAYLIST ────────────────────────────────────────────────────
     - id: page_playlist
@@ -861,10 +685,6 @@ sensor:
                 break;
             }
 
-  # Wi-Fi signal strength — creates a diagnostic entity in HA automatically
-  - platform: wifi_signal
-    name: "${friendly_name} WiFi Signal"
-    update_interval: 60s
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -906,18 +726,6 @@ binary_sensor:
           - script.execute: wake_screen
           - script.execute: next_mode
 
-  # ── Hold / side button GPIO46 ───────────────────────────────────────────
-  # Wired as normally-open to GND; reserved for future use.
-  - platform: gpio
-    pin:
-      number: GPIO46
-      mode: INPUT_PULLUP
-      inverted: true
-    id: hold_button
-    name: "${friendly_name} Hold Button"
-    on_press:
-      then:
-        - script.execute: wake_screen
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1087,51 +895,6 @@ text_sensor:
                   id: lbl_play_icon
                   text: "\U0000E050"   # play_arrow (Material Symbols)
 
-
-  # ── Setup Key — Exposes the per-device API key to Home Assistant and the web UI.
-  # Copy this value from the HA entity (or from http://<device-ip>/) and paste
-  # it into the ESPHome device entry in HA when prompted for the encryption key.
-  - platform: template
-    id: ts_setup_key
-    name: "${friendly_name} Setup Key"
-    icon: "mdi:key-variant"
-    entity_category: diagnostic
-    # Returns the 44-char base64 key loaded/generated at boot priority 400
-    lambda: 'return id(device_key);'
-    update_interval: never   # Only pushed on boot and after factory reset
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# FACTORY RESET BUTTON
-# Generates a brand-new device key and installs it as the active Noise PSK.
-# After pressing this button:
-#   1. The Setup Key entity shows the new key.
-#   2. HA will lose connection (old key no longer valid).
-#   3. Re-add the device in HA using the new key shown in the entity/web page.
-# ─────────────────────────────────────────────────────────────────────────────
-button:
-  - platform: template
-    name: "${friendly_name} Factory Reset"
-    icon: "mdi:lock-reset"
-    entity_category: config
-    on_press:
-      then:
-        - lambda: |-
-            std::string key = generate_device_key();
-            nvs_save_device_key(key);
-            id(device_key)  = key;
-            id(device_code) = derive_display_code(key);
-            auto psk = key_to_psk(key);
-            id(my_api)->set_noise_psk(psk);   // Install new key immediately
-            ESP_LOGW("security", "Factory reset — new device ID: %s",
-                     id(device_code).c_str());
-        # Refresh the Setup Key entity so HA sees the new value
-        - component.update: ts_setup_key
-        # Show setup page and update the device code label on the display
-        - lvgl.page.show: page_setup
-        - lvgl.label.update:
-            id: lbl_device_code
-            text: !lambda 'return id(device_code);'
 
 
 # ─────────────────────────────────────────────────────────────────────────────
