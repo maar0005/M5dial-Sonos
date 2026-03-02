@@ -42,8 +42,6 @@ esphome:
     board_build.flash_mode: qio
     lib_deps:
       - Wire
-      - m5stack/M5Unified@0.1.14
-      - m5stack/M5Dial@1.0.2
 
 
 # ─────────────────────────────────────────────────────────────────────────────

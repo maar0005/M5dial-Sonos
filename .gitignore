@@ -1,3 +1,4 @@
 secrets.yaml
+logs.txt
 .esphome/
 build/
