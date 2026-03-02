@@ -414,7 +414,6 @@ display:
       width: 240
       height: 240
     color_order: bgr
-    mirror_x: true
     cs_pin:    GPIO7
     dc_pin:    GPIO4
     reset_pin: GPIO8
