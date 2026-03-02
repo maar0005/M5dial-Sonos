@@ -320,19 +320,18 @@ globals:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DISPLAY — GC9A01A 240×240 round, SPI
-# Uses the built-in ESPHome GC9A01A model (available since 2025.1).
 # ─────────────────────────────────────────────────────────────────────────────
 display:
   - platform: ili9xxx
     model: GC9A01A
     id: round_display
-    color_order: bgr
     cs_pin: GPIO7
     dc_pin: GPIO4
     reset_pin: GPIO8
     invert_colors: true
     auto_clear_enabled: false
     update_interval: never
+    show_test_card: true
 
 
 # ─────────────────────────────────────────────────────────────────────────────
