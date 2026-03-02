@@ -146,7 +146,7 @@ api:
 # Change level to DEBUG when troubleshooting display or Sonos attribute issues.
 # ─────────────────────────────────────────────────────────────────────────────
 logger:
-  level: WARN
+  level: DEBUG
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -326,6 +326,7 @@ display:
   - platform: ili9xxx
     model: GC9A01A
     id: round_display
+    color_order: bgr
     cs_pin: GPIO7
     dc_pin: GPIO4
     reset_pin: GPIO8
