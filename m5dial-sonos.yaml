@@ -56,6 +56,8 @@ esphome:
   friendly_name: "${friendly_name}"
   min_version: "2024.2.0"   # LVGL requires 2024.2+; ili9xxx gc9a01a model requires 2025.1+
   name_add_mac_suffix: false
+  platformio_options:
+    board_build.flash_mode: dio
   # Security header — per-device key generation via ESP32 hardware RNG.
   # Must be in the same folder as this YAML file.
   includes:
@@ -112,9 +114,6 @@ esphome:
 # PLATFORM — ESP32-S3FN8, 8 MB flash, ESP-IDF framework
 # Matches the official ESPHome M5Stack Dial reference config exactly.
 # ─────────────────────────────────────────────────────────────────────────────
-platformio_options:
-  board_build.flash_mode: dio
-
 esp32:
   variant: esp32s3
   framework:
