@@ -7,7 +7,6 @@ and button input.
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.const import CONF_ID
-from esphome.components.esp32 import include_builtin_idf_component
 
 CODEOWNERS = ["@mtn"]
 DEPENDENCIES = []
@@ -40,12 +39,3 @@ async def to_code(config):
     cg.add(var.set_screen_off_time(config[CONF_SCREEN_OFF_TIME]))
     cg.add(var.set_long_press_duration(config[CONF_LONG_PRESS_DURATION]))
     cg.add(var.set_volume_step(config[CONF_VOLUME_STEP]))
-
-    cg.add_library("m5stack/M5Unified", "0.2.2")
-    cg.add_library("m5stack/M5Dial", "1.0.2")
-
-    # M5GFX (bundled with M5Unified) requires esp_lcd and driver IDF components
-    include_builtin_idf_component("esp_lcd")
-    include_builtin_idf_component("driver")
-
-    cg.add_platformio_option("lib_ldf_mode", "deep+")

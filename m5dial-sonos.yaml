@@ -40,6 +40,10 @@ esphome:
   name_add_mac_suffix: false
   platformio_options:
     board_build.flash_mode: qio
+    lib_deps:
+      - Wire
+      - m5stack/M5Unified@0.1.14
+      - m5stack/M5Dial@1.0.2
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -99,16 +103,7 @@ logger:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# I2C — Internal bus (RTC + NFC)
-# ─────────────────────────────────────────────────────────────────────────────
-i2c:
-  sda: GPIO11
-  scl: GPIO12
-  scan: false
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# OUTPUTS — Buzzer only (backlight managed by M5 library)
+# OUTPUTS — Buzzer only (backlight + I2C managed by M5 library)
 # ─────────────────────────────────────────────────────────────────────────────
 output:
   - platform: ledc
@@ -126,21 +121,12 @@ rtttl:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TIME — HA (primary) + PCF8563 RTC (fallback)
+# TIME — HA only (RTC managed by M5 library internally)
 # ─────────────────────────────────────────────────────────────────────────────
 time:
   - platform: homeassistant
     id: ha_time
     timezone: "${timezone}"
-    on_time_sync:
-      then:
-        - pcf8563.write_time:
-
-  - platform: pcf8563
-    id: rtc_time
-    address: 0x51
-    timezone: "${timezone}"
-    update_interval: 60s
 
 
 # ─────────────────────────────────────────────────────────────────────────────

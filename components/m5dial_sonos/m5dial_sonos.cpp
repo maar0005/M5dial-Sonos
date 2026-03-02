@@ -38,9 +38,8 @@ float M5DialSonos::get_setup_priority() const {
 void M5DialSonos::setup() {
   ESP_LOGI(TAG, "Initialising M5Dial display...");
 
-  // Init M5Dial — enable display, disable encoder (ESPHome owns GPIOs)
   auto cfg = M5.config();
-  M5Dial.begin(cfg, true /* enableDisplay */, false /* enableEncoder */);
+  M5Dial.begin(cfg, true /* enableEncoder */, false /* enableRFID */);
 
   M5Dial.Display.setRotation(0);
   M5Dial.Display.fillScreen(COL_BG);
