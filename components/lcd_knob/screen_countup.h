@@ -24,7 +24,6 @@ class CountUpScreen : public Screen {
 
   void draw()           override;
   void on_short_press() override;
-  bool on_long_press()  override;
 
   void tick(uint32_t now_ms);
 

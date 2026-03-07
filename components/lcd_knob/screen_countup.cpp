@@ -28,15 +28,6 @@ void CountUpScreen::on_short_press() {
   }
 }
 
-bool CountUpScreen::on_long_press() {
-  state_->running   = false;
-  state_->start_ms  = 0;
-  state_->elapsed_s = 0;
-  last_elapsed_s_   = 0xFFFFFFFF;
-  mark_dirty();
-  return true;
-}
-
 // ── Draw ──────────────────────────────────────────────────────────────────────
 
 void CountUpScreen::draw() {

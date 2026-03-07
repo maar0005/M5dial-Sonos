@@ -24,65 +24,73 @@ void LcdKnob::setup() {
   last_interaction_ = millis();
 
   // ── Build groups in declaration order ─────────────────────────────────────
+  // Timer / alarm / count-up pages are collected into a single "Alarms" group.
+  // Long press cycles between them (same pattern as Sonos pages).
   std::vector<std::string> group_names;
+  ScreenGroup alarms_group;
+  alarms_group.name = "Alarms";
+
   for (auto &sc : screen_configs_) {
-    ScreenGroup g;
     switch (sc.kind) {
       case ScreenKind::SONOS: {
-        g.name             = "Sonos";
+        ScreenGroup g;
+        g.name              = "Sonos";
         sonos_state_.entity = sc.sonos_entity;
-        sonos_playlist_    = new SonosPlaylistScreen(&sonos_state_);
-        sonos_now_playing_ = new SonosNowPlayingScreen(&sonos_state_);
-        sonos_volume_      = new SonosVolumeScreen(&sonos_state_, sc.sonos_volume_step);
+        sonos_playlist_     = new SonosPlaylistScreen(&sonos_state_);
+        sonos_now_playing_  = new SonosNowPlayingScreen(&sonos_state_);
+        sonos_volume_       = new SonosVolumeScreen(&sonos_state_, sc.sonos_volume_step);
         g.pages = {sonos_playlist_, sonos_now_playing_, sonos_volume_};
+        groups_.push_back(std::move(g));
+        group_names.push_back("Sonos");
         break;
       }
       case ScreenKind::MEATER: {
+        ScreenGroup g;
         g.name  = "Meater";
         meater_ = new MeaterScreen();
         if (!sc.meater_entity_temp.empty())    meater_->set_entity_temperature(sc.meater_entity_temp);
         if (!sc.meater_entity_target.empty())  meater_->set_entity_target(sc.meater_entity_target);
         if (!sc.meater_entity_ambient.empty()) meater_->set_entity_ambient(sc.meater_entity_ambient);
         g.pages = {meater_};
+        groups_.push_back(std::move(g));
+        group_names.push_back("Meater");
         break;
       }
       case ScreenKind::TIMER: {
-        g.name = "Timer 1";
         timer1_state_.duration_s  = sc.timer_default_s;
         timer1_state_.remaining_s = sc.timer_default_s;
         timer1_screen_ = new TimerScreen("TIMER 1", &timer1_state_);
-        g.pages = {timer1_screen_};
+        alarms_group.pages.push_back(timer1_screen_);
         break;
       }
       case ScreenKind::TIMER2: {
-        g.name = "Timer 2";
         timer2_state_.duration_s  = sc.timer_default_s;
         timer2_state_.remaining_s = sc.timer_default_s;
         timer2_screen_ = new TimerScreen("TIMER 2", &timer2_state_);
-        g.pages = {timer2_screen_};
+        alarms_group.pages.push_back(timer2_screen_);
         break;
       }
       case ScreenKind::ALARM: {
-        g.name = "Alarm 1";
         alarm1_screen_ = new AlarmScreen("ALARM 1", &alarm1_state_);
-        g.pages = {alarm1_screen_};
+        alarms_group.pages.push_back(alarm1_screen_);
         break;
       }
       case ScreenKind::ALARM2: {
-        g.name = "Alarm 2";
         alarm2_screen_ = new AlarmScreen("ALARM 2", &alarm2_state_);
-        g.pages = {alarm2_screen_};
+        alarms_group.pages.push_back(alarm2_screen_);
         break;
       }
       case ScreenKind::COUNTUP: {
-        g.name = "Count Up";
         countup_screen_ = new CountUpScreen(&countup_state_);
-        g.pages = {countup_screen_};
+        alarms_group.pages.push_back(countup_screen_);
         break;
       }
     }
-    groups_.push_back(std::move(g));
-    group_names.push_back(groups_.back().name);
+  }
+
+  if (!alarms_group.pages.empty()) {
+    groups_.push_back(std::move(alarms_group));
+    group_names.push_back("Alarms");
   }
 
   menu_screen_ = new MenuScreen();
@@ -539,7 +547,10 @@ void LcdKnob::start_countup() {
 }
 
 void LcdKnob::reset_countup() {
-  if (countup_screen_) countup_screen_->on_long_press();
+  countup_state_.running   = false;
+  countup_state_.start_ms  = 0;
+  countup_state_.elapsed_s = 0;
+  if (countup_screen_) countup_screen_->mark_dirty();
 }
 
 bool     LcdKnob::is_countup_running()  const { return countup_state_.running;   }

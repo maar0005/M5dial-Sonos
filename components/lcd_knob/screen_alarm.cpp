@@ -57,12 +57,15 @@ void AlarmScreen::on_short_press() {
 }
 
 bool AlarmScreen::on_long_press() {
-  state_->edit_field = AlarmEditField::NONE;
-  state_->armed      = false;
-  state_->fired      = false;
-  blink_on_          = true;
-  mark_dirty();
-  return true;
+  if (state_->edit_field != AlarmEditField::NONE) {
+    // Cancel edit without saving — stay on this screen
+    state_->edit_field = AlarmEditField::NONE;
+    blink_on_          = true;
+    mark_dirty();
+    return true;
+  }
+  // Not editing: let the orchestrator cycle to the next page
+  return false;
 }
 
 // ── Alarm check (called from LcdKnob::check_alarms every minute) ─────────────

@@ -57,6 +57,7 @@ void TimerScreen::adjust_duration(int direction) {
 
   state_->remaining_s     = state_->duration_s;
   state_->elapsed_at_pause = 0;
+  state_->fired           = false;  // clear fired state when user sets a new duration
   mark_dirty();
 }
 
@@ -94,15 +95,6 @@ void TimerScreen::on_short_press() {
     state_->running  = true;
   }
   mark_dirty();
-}
-
-bool TimerScreen::on_long_press() {
-  state_->running         = false;
-  state_->remaining_s     = state_->duration_s;
-  state_->elapsed_at_pause = 0;
-  state_->fired           = false;
-  mark_dirty();
-  return true;
 }
 
 // ── Draw ──────────────────────────────────────────────────────────────────────
