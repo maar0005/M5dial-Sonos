@@ -46,6 +46,40 @@ void LcdKnob::setup() {
         g.pages = {meater_};
         break;
       }
+      case ScreenKind::TIMER: {
+        g.name = "Timer 1";
+        timer1_state_.duration_s  = sc.timer_default_s;
+        timer1_state_.remaining_s = sc.timer_default_s;
+        timer1_screen_ = new TimerScreen("TIMER 1", &timer1_state_);
+        g.pages = {timer1_screen_};
+        break;
+      }
+      case ScreenKind::TIMER2: {
+        g.name = "Timer 2";
+        timer2_state_.duration_s  = sc.timer_default_s;
+        timer2_state_.remaining_s = sc.timer_default_s;
+        timer2_screen_ = new TimerScreen("TIMER 2", &timer2_state_);
+        g.pages = {timer2_screen_};
+        break;
+      }
+      case ScreenKind::ALARM: {
+        g.name = "Alarm 1";
+        alarm1_screen_ = new AlarmScreen("ALARM 1", &alarm1_state_);
+        g.pages = {alarm1_screen_};
+        break;
+      }
+      case ScreenKind::ALARM2: {
+        g.name = "Alarm 2";
+        alarm2_screen_ = new AlarmScreen("ALARM 2", &alarm2_state_);
+        g.pages = {alarm2_screen_};
+        break;
+      }
+      case ScreenKind::COUNTUP: {
+        g.name = "Count Up";
+        countup_screen_ = new CountUpScreen(&countup_state_);
+        g.pages = {countup_screen_};
+        break;
+      }
     }
     groups_.push_back(std::move(g));
     group_names.push_back(groups_.back().name);
@@ -62,9 +96,13 @@ void LcdKnob::loop() {
 
   uint32_t now = millis();
 
+  // ── Tick running timers and count-up ──────────────────────────────────────
+  if (timer1_screen_)  timer1_screen_->tick(now);
+  if (timer2_screen_)  timer2_screen_->tick(now);
+  if (countup_screen_) countup_screen_->tick(now);
+
   // ── Screen dim ────────────────────────────────────────────────────────────
-  bool playing = sonos_state_.is_playing;
-  if (!screen_dimmed_ && !playing &&
+  if (!screen_dimmed_ && !any_active() &&
       (now - last_interaction_) > screen_off_time_) {
     M5Dial.Display.setBrightness(BRIGHTNESS_DIM);
     screen_dimmed_ = true;
@@ -134,6 +172,38 @@ void LcdKnob::configure_meater(const std::string &t,
   screen_configs_.push_back(sc);
 }
 
+void LcdKnob::configure_timer(uint32_t default_s) {
+  ScreenConfig sc;
+  sc.kind            = ScreenKind::TIMER;
+  sc.timer_default_s = default_s;
+  screen_configs_.push_back(sc);
+}
+
+void LcdKnob::configure_timer2(uint32_t default_s) {
+  ScreenConfig sc;
+  sc.kind            = ScreenKind::TIMER2;
+  sc.timer_default_s = default_s;
+  screen_configs_.push_back(sc);
+}
+
+void LcdKnob::configure_alarm() {
+  ScreenConfig sc;
+  sc.kind = ScreenKind::ALARM;
+  screen_configs_.push_back(sc);
+}
+
+void LcdKnob::configure_alarm2() {
+  ScreenConfig sc;
+  sc.kind = ScreenKind::ALARM2;
+  screen_configs_.push_back(sc);
+}
+
+void LcdKnob::configure_countup() {
+  ScreenConfig sc;
+  sc.kind = ScreenKind::COUNTUP;
+  screen_configs_.push_back(sc);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Menu control
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -196,6 +266,8 @@ void LcdKnob::on_long_press() {
     close_menu();  // Cancel: long press in menu exits without changing group
     return;
   }
+  Screen *s = current_screen();
+  if (s && s->on_long_press()) return;  // Screen consumed the event
   next_page_in_group();
   // Beep is handled in YAML
 }
@@ -325,6 +397,162 @@ bool LcdKnob::is_meater()            const { return !in_menu_ && current_screen(
 void LcdKnob::set_meater_temperature(float t) { if (meater_) meater_->set_temperature(t); }
 void LcdKnob::set_meater_target     (float t) { if (meater_) meater_->set_target(t);      }
 void LcdKnob::set_meater_ambient    (float t) { if (meater_) meater_->set_ambient(t);     }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Timer 1
+// ═══════════════════════════════════════════════════════════════════════════════
+
+void LcdKnob::set_timer_duration(uint32_t s) {
+  timer1_state_.duration_s = s;
+  if (!timer1_state_.running) {
+    timer1_state_.remaining_s     = s;
+    timer1_state_.elapsed_at_pause = 0;
+    if (timer1_screen_) timer1_screen_->mark_dirty();
+  }
+}
+
+void LcdKnob::start_timer() {
+  if (timer1_screen_ && !timer1_state_.running) timer1_screen_->on_short_press();
+}
+
+void LcdKnob::stop_timer() {
+  if (timer1_screen_ && timer1_state_.running) timer1_screen_->on_short_press();
+}
+
+bool     LcdKnob::is_timer_running()    const { return timer1_state_.running;    }
+uint32_t LcdKnob::get_timer_remaining() const { return timer1_state_.remaining_s; }
+bool     LcdKnob::is_timer_fired()      const { return timer1_state_.fired;       }
+
+void LcdKnob::clear_timer_fired() {
+  timer1_state_.fired = false;
+  if (timer1_screen_) timer1_screen_->mark_dirty();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Timer 2
+// ═══════════════════════════════════════════════════════════════════════════════
+
+void LcdKnob::set_timer2_duration(uint32_t s) {
+  timer2_state_.duration_s = s;
+  if (!timer2_state_.running) {
+    timer2_state_.remaining_s     = s;
+    timer2_state_.elapsed_at_pause = 0;
+    if (timer2_screen_) timer2_screen_->mark_dirty();
+  }
+}
+
+void LcdKnob::start_timer2() {
+  if (timer2_screen_ && !timer2_state_.running) timer2_screen_->on_short_press();
+}
+
+void LcdKnob::stop_timer2() {
+  if (timer2_screen_ && timer2_state_.running) timer2_screen_->on_short_press();
+}
+
+bool     LcdKnob::is_timer2_running()    const { return timer2_state_.running;    }
+uint32_t LcdKnob::get_timer2_remaining() const { return timer2_state_.remaining_s; }
+bool     LcdKnob::is_timer2_fired()      const { return timer2_state_.fired;       }
+
+void LcdKnob::clear_timer2_fired() {
+  timer2_state_.fired = false;
+  if (timer2_screen_) timer2_screen_->mark_dirty();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Alarm 1
+// ═══════════════════════════════════════════════════════════════════════════════
+
+void LcdKnob::set_alarm_hour(uint8_t h) {
+  alarm1_state_.hour = h % 24;
+  if (alarm1_screen_) alarm1_screen_->mark_dirty();
+}
+
+void LcdKnob::set_alarm_minute(uint8_t m) {
+  alarm1_state_.minute = m % 60;
+  if (alarm1_screen_) alarm1_screen_->mark_dirty();
+}
+
+void LcdKnob::arm_alarm() {
+  alarm1_state_.armed = true;
+  alarm1_state_.fired = false;
+  if (alarm1_screen_) alarm1_screen_->mark_dirty();
+}
+
+void LcdKnob::disarm_alarm() {
+  alarm1_state_.armed = false;
+  alarm1_state_.fired = false;
+  if (alarm1_screen_) alarm1_screen_->mark_dirty();
+}
+
+bool    LcdKnob::is_alarm_armed()   const { return alarm1_state_.armed;  }
+bool    LcdKnob::is_alarm_fired()   const { return alarm1_state_.fired;  }
+uint8_t LcdKnob::get_alarm_hour()   const { return alarm1_state_.hour;   }
+uint8_t LcdKnob::get_alarm_minute() const { return alarm1_state_.minute; }
+
+void LcdKnob::clear_alarm_fired() {
+  alarm1_state_.fired = false;
+  if (alarm1_screen_) alarm1_screen_->mark_dirty();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Alarm 2
+// ═══════════════════════════════════════════════════════════════════════════════
+
+void LcdKnob::set_alarm2_hour(uint8_t h) {
+  alarm2_state_.hour = h % 24;
+  if (alarm2_screen_) alarm2_screen_->mark_dirty();
+}
+
+void LcdKnob::set_alarm2_minute(uint8_t m) {
+  alarm2_state_.minute = m % 60;
+  if (alarm2_screen_) alarm2_screen_->mark_dirty();
+}
+
+void LcdKnob::arm_alarm2() {
+  alarm2_state_.armed = true;
+  alarm2_state_.fired = false;
+  if (alarm2_screen_) alarm2_screen_->mark_dirty();
+}
+
+void LcdKnob::disarm_alarm2() {
+  alarm2_state_.armed = false;
+  alarm2_state_.fired = false;
+  if (alarm2_screen_) alarm2_screen_->mark_dirty();
+}
+
+bool    LcdKnob::is_alarm2_armed()   const { return alarm2_state_.armed;  }
+bool    LcdKnob::is_alarm2_fired()   const { return alarm2_state_.fired;  }
+uint8_t LcdKnob::get_alarm2_hour()   const { return alarm2_state_.hour;   }
+uint8_t LcdKnob::get_alarm2_minute() const { return alarm2_state_.minute; }
+
+void LcdKnob::clear_alarm2_fired() {
+  alarm2_state_.fired = false;
+  if (alarm2_screen_) alarm2_screen_->mark_dirty();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Count-up
+// ═══════════════════════════════════════════════════════════════════════════════
+
+void LcdKnob::start_countup() {
+  if (countup_screen_ && !countup_state_.running) countup_screen_->on_short_press();
+}
+
+void LcdKnob::reset_countup() {
+  if (countup_screen_) countup_screen_->on_long_press();
+}
+
+bool     LcdKnob::is_countup_running()  const { return countup_state_.running;   }
+uint32_t LcdKnob::get_countup_elapsed() const { return countup_state_.elapsed_s; }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Alarm check
+// ═══════════════════════════════════════════════════════════════════════════════
+
+void LcdKnob::check_alarms(uint8_t hour, uint8_t minute) {
+  if (alarm1_screen_) alarm1_screen_->check(hour, minute);
+  if (alarm2_screen_) alarm2_screen_->check(hour, minute);
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Drawing

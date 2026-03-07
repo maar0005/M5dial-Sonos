@@ -115,6 +115,33 @@ lcd_knob:
       entity_target:      "${meater_entity_target}"
       entity_ambient:     "${meater_entity_ambient}"
 
+    # ── Kitchen timer 1 ───────────────────────────────────────────────────────
+    # Countdown timer. Rotary sets duration; short press starts/pauses;
+    # long press resets. Fires a HA binary_sensor when it reaches zero.
+    - type: timer
+      used: true
+      default_duration: 5    # minutes (1–99)
+
+    # ── Kitchen timer 2 ───────────────────────────────────────────────────────
+    - type: timer2
+      used: true
+      default_duration: 10
+
+    # ── Alarm 1 ───────────────────────────────────────────────────────────────
+    # Time-of-day alarm. Short press enters edit mode (hour → minute → save+arm).
+    # Long press disarms.
+    - type: alarm
+      used: true
+
+    # ── Alarm 2 ───────────────────────────────────────────────────────────────
+    - type: alarm2
+      used: true
+
+    # ── Count-up timer ────────────────────────────────────────────────────────
+    # Short press starts; long press resets.
+    - type: countup
+      used: true
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # WI-FI
@@ -159,12 +186,18 @@ rtttl:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TIME — synced from Home Assistant
+# TIME — synced from Home Assistant + alarm check every minute
 # ─────────────────────────────────────────────────────────────────────────────
 time:
   - platform: homeassistant
     id: ha_time
     timezone: "${timezone}"
+    on_time:
+      - seconds: 0
+        then:
+          - lambda: |
+              auto t = id(ha_time).now();
+              if (t.is_valid()) id(knob).check_alarms(t.hour, t.minute);
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -206,6 +239,29 @@ sensor:
             } else if (id(knob).is_sonos_volume()) {
               id(action_set_volume).execute();
             }
+
+  # ── Timer remaining (polls the on-device state every second) ─────────────────
+  - platform: template
+    name: "Timer 1 Remaining"
+    id: timer1_remaining
+    unit_of_measurement: "s"
+    update_interval: 1s
+    lambda: 'return (float)id(knob).get_timer_remaining();'
+
+  - platform: template
+    name: "Timer 2 Remaining"
+    id: timer2_remaining
+    unit_of_measurement: "s"
+    update_interval: 1s
+    lambda: 'return (float)id(knob).get_timer2_remaining();'
+
+  # ── Count-up elapsed ──────────────────────────────────────────────────────────
+  - platform: template
+    name: "Count Up Elapsed"
+    id: countup_elapsed
+    unit_of_measurement: "s"
+    update_interval: 1s
+    lambda: 'return (float)id(knob).get_countup_elapsed();'
 
   # ── MEATER sensors ── uncomment when meater  used: true ──────────────────────
   # - platform: homeassistant
@@ -260,6 +316,156 @@ binary_sensor:
         then:
           - lambda: 'id(knob).on_long_press();'
           - rtttl.play: "mode:d=32,o=5,b=220:c,e"
+
+  # ── Timer fired notifications (template binary_sensors) ───────────────────
+  - platform: template
+    name: "Timer 1 Fired"
+    id: timer1_fired
+    lambda: 'return id(knob).is_timer_fired();'
+    on_press:
+      - rtttl.play: "timer:d=8,o=5,b=180:c,e,g,c6,g,e,c"
+      - lambda: 'id(knob).clear_timer_fired();'
+
+  - platform: template
+    name: "Timer 2 Fired"
+    id: timer2_fired
+    lambda: 'return id(knob).is_timer2_fired();'
+    on_press:
+      - rtttl.play: "timer:d=8,o=5,b=180:c,e,g,c6,g,e,c"
+      - lambda: 'id(knob).clear_timer2_fired();'
+
+  - platform: template
+    name: "Alarm 1 Fired"
+    id: alarm1_fired
+    lambda: 'return id(knob).is_alarm_fired();'
+    on_press:
+      - rtttl.play: "alarm:d=4,o=5,b=160:c,c,p,c,c,p,c,c,c,c"
+      - lambda: 'id(knob).clear_alarm_fired();'
+
+  - platform: template
+    name: "Alarm 2 Fired"
+    id: alarm2_fired
+    lambda: 'return id(knob).is_alarm2_fired();'
+    on_press:
+      - rtttl.play: "alarm:d=4,o=5,b=160:c,c,p,c,c,p,c,c,c,c"
+      - lambda: 'id(knob).clear_alarm2_fired();'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NUMBERS — Timer duration and alarm time, settable from Home Assistant
+# ─────────────────────────────────────────────────────────────────────────────
+number:
+  - platform: template
+    name: "Timer 1 Duration"
+    id: timer1_duration
+    min_value: 1
+    max_value: 99
+    step: 1
+    unit_of_measurement: "min"
+    mode: box
+    set_action:
+      lambda: 'id(knob).set_timer_duration((uint32_t)(x * 60));'
+
+  - platform: template
+    name: "Timer 2 Duration"
+    id: timer2_duration
+    min_value: 1
+    max_value: 99
+    step: 1
+    unit_of_measurement: "min"
+    mode: box
+    set_action:
+      lambda: 'id(knob).set_timer2_duration((uint32_t)(x * 60));'
+
+  - platform: template
+    name: "Alarm 1 Hour"
+    id: alarm1_hour
+    min_value: 0
+    max_value: 23
+    step: 1
+    mode: box
+    set_action:
+      lambda: 'id(knob).set_alarm_hour((uint8_t)x);'
+
+  - platform: template
+    name: "Alarm 1 Minute"
+    id: alarm1_minute
+    min_value: 0
+    max_value: 59
+    step: 1
+    mode: box
+    set_action:
+      lambda: 'id(knob).set_alarm_minute((uint8_t)x);'
+
+  - platform: template
+    name: "Alarm 2 Hour"
+    id: alarm2_hour
+    min_value: 0
+    max_value: 23
+    step: 1
+    mode: box
+    set_action:
+      lambda: 'id(knob).set_alarm2_hour((uint8_t)x);'
+
+  - platform: template
+    name: "Alarm 2 Minute"
+    id: alarm2_minute
+    min_value: 0
+    max_value: 59
+    step: 1
+    mode: box
+    set_action:
+      lambda: 'id(knob).set_alarm2_minute((uint8_t)x);'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SWITCHES — Timer run/stop, alarm arm/disarm, count-up start/reset
+# ─────────────────────────────────────────────────────────────────────────────
+switch:
+  - platform: template
+    name: "Timer 1 Running"
+    id: timer1_running
+    turn_on_action:
+      lambda: 'id(knob).start_timer();'
+    turn_off_action:
+      lambda: 'id(knob).stop_timer();'
+    lambda: 'return id(knob).is_timer_running();'
+
+  - platform: template
+    name: "Timer 2 Running"
+    id: timer2_running
+    turn_on_action:
+      lambda: 'id(knob).start_timer2();'
+    turn_off_action:
+      lambda: 'id(knob).stop_timer2();'
+    lambda: 'return id(knob).is_timer2_running();'
+
+  - platform: template
+    name: "Alarm 1 Armed"
+    id: alarm1_armed
+    turn_on_action:
+      lambda: 'id(knob).arm_alarm();'
+    turn_off_action:
+      lambda: 'id(knob).disarm_alarm();'
+    lambda: 'return id(knob).is_alarm_armed();'
+
+  - platform: template
+    name: "Alarm 2 Armed"
+    id: alarm2_armed
+    turn_on_action:
+      lambda: 'id(knob).arm_alarm2();'
+    turn_off_action:
+      lambda: 'id(knob).disarm_alarm2();'
+    lambda: 'return id(knob).is_alarm2_armed();'
+
+  - platform: template
+    name: "Count Up Running"
+    id: countup_running
+    turn_on_action:
+      lambda: 'id(knob).start_countup();'
+    turn_off_action:
+      lambda: 'id(knob).reset_countup();'
+    lambda: 'return id(knob).is_countup_running();'
 
 
 # ─────────────────────────────────────────────────────────────────────────────

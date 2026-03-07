@@ -5,6 +5,9 @@
 #include "screen_menu.h"
 #include "screen_sonos.h"
 #include "screen_meater.h"
+#include "screen_timer.h"
+#include "screen_alarm.h"
+#include "screen_countup.h"
 #include <vector>
 #include <string>
 
@@ -21,7 +24,7 @@ struct ScreenGroup {
 };
 
 // ── Config queue entries (pre-setup) ─────────────────────────────────────────
-enum class ScreenKind : uint8_t { SONOS, MEATER };
+enum class ScreenKind : uint8_t { SONOS, MEATER, TIMER, TIMER2, ALARM, ALARM2, COUNTUP };
 
 struct ScreenConfig {
   ScreenKind  kind;
@@ -30,6 +33,7 @@ struct ScreenConfig {
   std::string meater_entity_temp;
   std::string meater_entity_target;
   std::string meater_entity_ambient;
+  uint32_t    timer_default_s{300};  // used by TIMER / TIMER2
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -45,10 +49,15 @@ class LcdKnob : public Component {
   void set_long_press_duration(uint32_t ms) { long_press_duration_ = ms; }
 
   // ── Screen declarations — called in order from generated code ─────────────
-  void configure_sonos (const std::string &entity, int volume_step);
-  void configure_meater(const std::string &entity_temp,
-                        const std::string &entity_target,
-                        const std::string &entity_ambient);
+  void configure_sonos  (const std::string &entity, int volume_step);
+  void configure_meater (const std::string &entity_temp,
+                         const std::string &entity_target,
+                         const std::string &entity_ambient);
+  void configure_timer  (uint32_t default_s);
+  void configure_timer2 (uint32_t default_s);
+  void configure_alarm  ();
+  void configure_alarm2 ();
+  void configure_countup();
 
   // ── Menu control (also triggered from touch double-tap in loop()) ─────────
   void open_menu();
@@ -79,6 +88,55 @@ class LcdKnob : public Component {
   void set_meater_target     (float t);
   void set_meater_ambient    (float t);
 
+  // ── Timer 1 API ────────────────────────────────────────────────────────────
+  void     set_timer_duration(uint32_t s);
+  void     start_timer();
+  void     stop_timer();
+  bool     is_timer_running()   const;
+  uint32_t get_timer_remaining() const;
+  bool     is_timer_fired()     const;
+  void     clear_timer_fired();
+
+  // ── Timer 2 API ────────────────────────────────────────────────────────────
+  void     set_timer2_duration(uint32_t s);
+  void     start_timer2();
+  void     stop_timer2();
+  bool     is_timer2_running()   const;
+  uint32_t get_timer2_remaining() const;
+  bool     is_timer2_fired()     const;
+  void     clear_timer2_fired();
+
+  // ── Alarm 1 API ────────────────────────────────────────────────────────────
+  void    set_alarm_hour(uint8_t h);
+  void    set_alarm_minute(uint8_t m);
+  void    arm_alarm();
+  void    disarm_alarm();
+  bool    is_alarm_armed()  const;
+  bool    is_alarm_fired()  const;
+  void    clear_alarm_fired();
+  uint8_t get_alarm_hour()  const;
+  uint8_t get_alarm_minute() const;
+
+  // ── Alarm 2 API ────────────────────────────────────────────────────────────
+  void    set_alarm2_hour(uint8_t h);
+  void    set_alarm2_minute(uint8_t m);
+  void    arm_alarm2();
+  void    disarm_alarm2();
+  bool    is_alarm2_armed()  const;
+  bool    is_alarm2_fired()  const;
+  void    clear_alarm2_fired();
+  uint8_t get_alarm2_hour()  const;
+  uint8_t get_alarm2_minute() const;
+
+  // ── Count-up API ───────────────────────────────────────────────────────────
+  void     start_countup();
+  void     reset_countup();
+  bool     is_countup_running()  const;
+  uint32_t get_countup_elapsed() const;
+
+  // ── Alarm time check — call from YAML time.on_time every minute ────────────
+  void check_alarms(uint8_t hour, uint8_t minute);
+
   // ── Input handlers — called from YAML rotary / button lambdas ────────────
   void on_rotary_cw();
   void on_rotary_ccw();
@@ -103,6 +161,26 @@ class LcdKnob : public Component {
   SonosNowPlayingScreen *sonos_now_playing_{nullptr};
   SonosVolumeScreen     *sonos_volume_    {nullptr};
   MeaterScreen          *meater_          {nullptr};
+
+  TimerState   timer1_state_;
+  TimerState   timer2_state_;
+  TimerScreen *timer1_screen_{nullptr};
+  TimerScreen *timer2_screen_{nullptr};
+
+  AlarmState   alarm1_state_;
+  AlarmState   alarm2_state_;
+  AlarmScreen *alarm1_screen_{nullptr};
+  AlarmScreen *alarm2_screen_{nullptr};
+
+  CountUpState   countup_state_;
+  CountUpScreen *countup_screen_{nullptr};
+
+  bool any_active() const {
+    return sonos_state_.is_playing
+        || timer1_state_.running
+        || timer2_state_.running
+        || countup_state_.running;
+  }
 
   // ── Display / timeout ─────────────────────────────────────────────────────
   uint32_t screen_off_time_    {30000};

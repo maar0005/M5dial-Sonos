@@ -39,6 +39,7 @@ CONF_ENTITY_TARGET       = "entity_target"
 CONF_ENTITY_AMBIENT      = "entity_ambient"
 CONF_SCREEN_OFF_TIME     = "screen_off_time"
 CONF_LONG_PRESS_DURATION = "long_press_duration"
+CONF_DEFAULT_DURATION    = "default_duration"
 
 # ── C++ class references ──────────────────────────────────────────────────────
 lcd_knob_ns = cg.esphome_ns.namespace("lcd_knob")
@@ -60,9 +61,23 @@ MEATER_SCHEMA = cv.Schema(
     }
 )
 
+TIMER_SCHEMA = cv.Schema(
+    {
+        cv.Optional(CONF_DEFAULT_DURATION, default=5): cv.int_range(min=1, max=99),
+    }
+)
+
+ALARM_SCHEMA   = cv.Schema({})
+COUNTUP_SCHEMA = cv.Schema({})
+
 SCREEN_TYPE_SCHEMAS = {
-    "sonos":  SONOS_SCHEMA,
-    "meater": MEATER_SCHEMA,
+    "sonos":   SONOS_SCHEMA,
+    "meater":  MEATER_SCHEMA,
+    "timer":   TIMER_SCHEMA,
+    "timer2":  TIMER_SCHEMA,
+    "alarm":   ALARM_SCHEMA,
+    "alarm2":  ALARM_SCHEMA,
+    "countup": COUNTUP_SCHEMA,
 }
 
 
@@ -130,6 +145,21 @@ async def to_code(config):
                     screen.get(CONF_ENTITY_AMBIENT,     ""),
                 )
             )
+
+        elif t == "timer":
+            cg.add(var.configure_timer(screen.get(CONF_DEFAULT_DURATION, 5) * 60))
+
+        elif t == "timer2":
+            cg.add(var.configure_timer2(screen.get(CONF_DEFAULT_DURATION, 5) * 60))
+
+        elif t == "alarm":
+            cg.add(var.configure_alarm())
+
+        elif t == "alarm2":
+            cg.add(var.configure_alarm2())
+
+        elif t == "countup":
+            cg.add(var.configure_countup())
 
     # ── Arduino library dependencies ──────────────────────────────────────────
     # NOTE: M5Unified/M5Dial are used for hardware abstraction during the
