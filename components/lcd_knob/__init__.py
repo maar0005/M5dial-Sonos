@@ -79,7 +79,8 @@ def validate_screen(value):
         {
             cv.Required(CONF_TYPE): cv.one_of(*SCREEN_TYPE_SCHEMAS, lower=True),
             cv.Optional(CONF_USED, default=True): cv.boolean,
-        }
+        },
+        extra=cv.ALLOW_EXTRA,
     )
     # Merge base and type-specific validation results
     validated = {**base_schema(value), **SCREEN_TYPE_SCHEMAS[t](value)}
