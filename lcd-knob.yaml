@@ -335,6 +335,7 @@ sensor:
   # ── Light brightness — HA → device ────────────────────────────────────────────
   # HA brightness is 0–255; the component expects 0–100 %.
   - platform: homeassistant
+    id: light1_brightness_sensor
     entity_id: "${light1_entity}"
     attribute: brightness
     on_value:
@@ -342,6 +343,7 @@ sensor:
         - lambda: 'id(knob).on_light_brightness("${light1_entity}", (uint8_t)(x / 255.0f * 100.0f));'
 
   - platform: homeassistant
+    id: light2_brightness_sensor
     entity_id: "${light2_entity}"
     attribute: brightness
     on_value:
@@ -349,6 +351,7 @@ sensor:
         - lambda: 'id(knob).on_light_brightness("${light2_entity}", (uint8_t)(x / 255.0f * 100.0f));'
 
   - platform: homeassistant
+    id: light3_brightness_sensor
     entity_id: "${light3_entity}"
     attribute: brightness
     on_value:
@@ -356,6 +359,7 @@ sensor:
         - lambda: 'id(knob).on_light_brightness("${light3_entity}", (uint8_t)(x / 255.0f * 100.0f));'
 
   - platform: homeassistant
+    id: light4_brightness_sensor
     entity_id: "${light4_entity}"
     attribute: brightness
     on_value:
