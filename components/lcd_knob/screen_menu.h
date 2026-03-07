@@ -5,7 +5,7 @@
 #include <string>
 
 namespace esphome {
-namespace m5dial_sonos {
+namespace lcd_knob {
 
 // ── Menu screen ───────────────────────────────────────────────────────────────
 //
@@ -36,5 +36,5 @@ class MenuScreen : public Screen {
   size_t selection_{0};
 };
 
-}  // namespace m5dial_sonos
+}  // namespace lcd_knob
 }  // namespace esphome

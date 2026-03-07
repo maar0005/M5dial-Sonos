@@ -1,21 +1,21 @@
-#include "m5dial_sonos.h"
+#include "lcd_knob.h"
 #include "esphome/core/log.h"
 #include <M5Dial.h>
 
 namespace esphome {
-namespace m5dial_sonos {
+namespace lcd_knob {
 
-static const char *const TAG = "m5dial_sonos";
+static const char *const TAG = "lcd_knob";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Lifecycle
 // ═══════════════════════════════════════════════════════════════════════════════
 
-float M5DialSonos::get_setup_priority() const {
+float LcdKnob::get_setup_priority() const {
   return setup_priority::HARDWARE;
 }
 
-void M5DialSonos::setup() {
+void LcdKnob::setup() {
   auto cfg = M5.config();
   M5Dial.begin(cfg, true /* encoder */, false /* RFID */);
   M5Dial.Display.setRotation(0);
@@ -57,7 +57,7 @@ void M5DialSonos::setup() {
   ESP_LOGI(TAG, "M5Dial ready — %d group(s) registered", (int)groups_.size());
 }
 
-void M5DialSonos::loop() {
+void LcdKnob::loop() {
   M5Dial.update();
 
   uint32_t now = millis();
@@ -95,7 +95,7 @@ void M5DialSonos::loop() {
 // Helpers
 // ═══════════════════════════════════════════════════════════════════════════════
 
-Screen *M5DialSonos::current_screen() const {
+Screen *LcdKnob::current_screen() const {
   if (in_menu_) return menu_screen_;
   if (groups_.empty()) return nullptr;
   const auto &g = groups_[current_group_];
@@ -103,7 +103,7 @@ Screen *M5DialSonos::current_screen() const {
   return g.pages[g.current_page];
 }
 
-void M5DialSonos::next_page_in_group() {
+void LcdKnob::next_page_in_group() {
   if (groups_.empty()) return;
   auto &g = groups_[current_group_];
   if (g.pages.size() <= 1) return;
@@ -115,7 +115,7 @@ void M5DialSonos::next_page_in_group() {
 // Screen declarations (pre-setup, called from generated code)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-void M5DialSonos::configure_sonos(const std::string &entity, int volume_step) {
+void LcdKnob::configure_sonos(const std::string &entity, int volume_step) {
   ScreenConfig sc;
   sc.kind              = ScreenKind::SONOS;
   sc.sonos_entity      = entity;
@@ -123,7 +123,7 @@ void M5DialSonos::configure_sonos(const std::string &entity, int volume_step) {
   screen_configs_.push_back(sc);
 }
 
-void M5DialSonos::configure_meater(const std::string &t,
+void LcdKnob::configure_meater(const std::string &t,
                                     const std::string &tgt,
                                     const std::string &amb) {
   ScreenConfig sc;
@@ -138,7 +138,7 @@ void M5DialSonos::configure_meater(const std::string &t,
 // Menu control
 // ═══════════════════════════════════════════════════════════════════════════════
 
-void M5DialSonos::open_menu() {
+void LcdKnob::open_menu() {
   if (in_menu_) return;
   in_menu_ = true;
   if (menu_screen_) {
@@ -149,7 +149,7 @@ void M5DialSonos::open_menu() {
   ESP_LOGD(TAG, "Menu opened");
 }
 
-void M5DialSonos::close_menu() {
+void LcdKnob::close_menu() {
   if (!in_menu_) return;
   in_menu_ = false;
   Screen *s = current_screen();
@@ -157,7 +157,7 @@ void M5DialSonos::close_menu() {
   ESP_LOGD(TAG, "Menu closed → group %d", (int)current_group_);
 }
 
-void M5DialSonos::toggle_menu() {
+void LcdKnob::toggle_menu() {
   if (in_menu_) close_menu();
   else          open_menu();
 }
@@ -166,19 +166,19 @@ void M5DialSonos::toggle_menu() {
 // Input
 // ═══════════════════════════════════════════════════════════════════════════════
 
-void M5DialSonos::on_rotary_cw() {
+void LcdKnob::on_rotary_cw() {
   wake_screen();
   Screen *s = current_screen();
   if (s) s->on_rotary_cw();
 }
 
-void M5DialSonos::on_rotary_ccw() {
+void LcdKnob::on_rotary_ccw() {
   wake_screen();
   Screen *s = current_screen();
   if (s) s->on_rotary_ccw();
 }
 
-void M5DialSonos::on_short_press() {
+void LcdKnob::on_short_press() {
   wake_screen();
   if (in_menu_) {
     // Enter the highlighted group and close menu
@@ -190,7 +190,7 @@ void M5DialSonos::on_short_press() {
   if (s) s->on_short_press();
 }
 
-void M5DialSonos::on_long_press() {
+void LcdKnob::on_long_press() {
   wake_screen();
   if (in_menu_) {
     close_menu();  // Cancel: long press in menu exits without changing group
@@ -200,7 +200,7 @@ void M5DialSonos::on_long_press() {
   // Beep is handled in YAML
 }
 
-void M5DialSonos::wake_screen() {
+void LcdKnob::wake_screen() {
   last_interaction_ = millis();
   if (screen_dimmed_) {
     M5Dial.Display.setBrightness(BRIGHTNESS_FULL);
@@ -212,7 +212,7 @@ void M5DialSonos::wake_screen() {
 // Sonos state setters
 // ═══════════════════════════════════════════════════════════════════════════════
 
-void M5DialSonos::set_playlist_json(const std::string &json) {
+void LcdKnob::set_playlist_json(const std::string &json) {
   if (!sonos_playlist_) return;
   sonos_state_.playlist_names.clear();
 
@@ -250,26 +250,26 @@ void M5DialSonos::set_playlist_json(const std::string &json) {
   ESP_LOGI(TAG, "Parsed %d playlists", (int)sonos_state_.playlist_names.size());
 }
 
-void M5DialSonos::set_media_title(const std::string &title) {
+void LcdKnob::set_media_title(const std::string &title) {
   if (sonos_state_.media_title == title) return;
   sonos_state_.media_title = title;
   if (sonos_now_playing_) sonos_now_playing_->mark_dirty();
 }
 
-void M5DialSonos::set_media_artist(const std::string &artist) {
+void LcdKnob::set_media_artist(const std::string &artist) {
   if (sonos_state_.media_artist == artist) return;
   sonos_state_.media_artist = artist;
   if (sonos_now_playing_) sonos_now_playing_->mark_dirty();
 }
 
-void M5DialSonos::set_volume_level(float level) {
+void LcdKnob::set_volume_level(float level) {
   if (level < 0.0f) level = 0.0f;
   if (level > 1.0f) level = 1.0f;
   sonos_state_.volume = level;
   if (sonos_volume_) sonos_volume_->mark_dirty();
 }
 
-void M5DialSonos::set_player_state(const std::string &state) {
+void LcdKnob::set_player_state(const std::string &state) {
   bool was_playing = sonos_state_.is_playing;
   sonos_state_.is_playing = (state == "playing");
 
@@ -296,15 +296,15 @@ void M5DialSonos::set_player_state(const std::string &state) {
 // Sonos getters
 // ═══════════════════════════════════════════════════════════════════════════════
 
-float M5DialSonos::get_volume() const {
+float LcdKnob::get_volume() const {
   return sonos_state_.volume;
 }
 
-int M5DialSonos::get_playlist_count() const {
+int LcdKnob::get_playlist_count() const {
   return static_cast<int>(sonos_state_.playlist_names.size());
 }
 
-std::string M5DialSonos::get_current_playlist_name() const {
+std::string LcdKnob::get_current_playlist_name() const {
   if (sonos_state_.playlist_names.empty()) return "";
   return sonos_state_.playlist_names[sonos_state_.playlist_index];
 }
@@ -313,24 +313,24 @@ std::string M5DialSonos::get_current_playlist_name() const {
 // Screen-type queries
 // ═══════════════════════════════════════════════════════════════════════════════
 
-bool M5DialSonos::is_sonos_playlist()    const { return !in_menu_ && current_screen() == sonos_playlist_;    }
-bool M5DialSonos::is_sonos_now_playing() const { return !in_menu_ && current_screen() == sonos_now_playing_; }
-bool M5DialSonos::is_sonos_volume()      const { return !in_menu_ && current_screen() == sonos_volume_;      }
-bool M5DialSonos::is_meater()            const { return !in_menu_ && current_screen() == meater_;            }
+bool LcdKnob::is_sonos_playlist()    const { return !in_menu_ && current_screen() == sonos_playlist_;    }
+bool LcdKnob::is_sonos_now_playing() const { return !in_menu_ && current_screen() == sonos_now_playing_; }
+bool LcdKnob::is_sonos_volume()      const { return !in_menu_ && current_screen() == sonos_volume_;      }
+bool LcdKnob::is_meater()            const { return !in_menu_ && current_screen() == meater_;            }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Meater state setters
 // ═══════════════════════════════════════════════════════════════════════════════
 
-void M5DialSonos::set_meater_temperature(float t) { if (meater_) meater_->set_temperature(t); }
-void M5DialSonos::set_meater_target     (float t) { if (meater_) meater_->set_target(t);      }
-void M5DialSonos::set_meater_ambient    (float t) { if (meater_) meater_->set_ambient(t);     }
+void LcdKnob::set_meater_temperature(float t) { if (meater_) meater_->set_temperature(t); }
+void LcdKnob::set_meater_target     (float t) { if (meater_) meater_->set_target(t);      }
+void LcdKnob::set_meater_ambient    (float t) { if (meater_) meater_->set_ambient(t);     }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Drawing
 // ═══════════════════════════════════════════════════════════════════════════════
 
-void M5DialSonos::draw_mode_dots() {
+void LcdKnob::draw_mode_dots() {
   if (in_menu_) return;  // MenuScreen draws its own dots
   if (groups_.empty()) return;
 
@@ -350,5 +350,5 @@ void M5DialSonos::draw_mode_dots() {
   }
 }
 
-}  // namespace m5dial_sonos
+}  // namespace lcd_knob
 }  // namespace esphome

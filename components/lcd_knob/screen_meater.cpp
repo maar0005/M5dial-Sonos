@@ -2,7 +2,7 @@
 #include <M5Dial.h>
 
 namespace esphome {
-namespace m5dial_sonos {
+namespace lcd_knob {
 
 void MeaterScreen::draw() {
   auto &dsp = M5Dial.Display;
@@ -68,5 +68,5 @@ void MeaterScreen::draw() {
   }
 }
 
-}  // namespace m5dial_sonos
+}  // namespace lcd_knob
 }  // namespace esphome

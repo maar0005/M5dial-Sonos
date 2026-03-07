@@ -1,12 +1,12 @@
-"""ESPHome custom component: M5Dial Sonos Controller (modular screen edition).
+"""ESPHome custom component: Waveshare LCD Knob controller (modular screen edition).
 
 Screens are declared as a list; each has a type, a used flag, and type-specific
-entity configuration.  Only screens with used: true are compiled in.
+entity configuration.  Only screens with  used: true  are compiled in.
 
 Example configuration:
 
-  m5dial_sonos:
-    id: sonos_ui
+  lcd_knob:
+    id: knob
     screen_off_time: 30000
     screens:
       - type: sonos
@@ -41,8 +41,8 @@ CONF_SCREEN_OFF_TIME     = "screen_off_time"
 CONF_LONG_PRESS_DURATION = "long_press_duration"
 
 # ── C++ class references ──────────────────────────────────────────────────────
-m5dial_sonos_ns = cg.esphome_ns.namespace("m5dial_sonos")
-M5DialSonos = m5dial_sonos_ns.class_("M5DialSonos", cg.Component)
+lcd_knob_ns = cg.esphome_ns.namespace("lcd_knob")
+LcdKnob = lcd_knob_ns.class_("LcdKnob", cg.Component)
 
 # ── Per-type schemas ──────────────────────────────────────────────────────────
 SONOS_SCHEMA = cv.Schema(
@@ -89,7 +89,7 @@ def validate_screen(value):
 # ── Top-level component schema ────────────────────────────────────────────────
 CONFIG_SCHEMA = cv.Schema(
     {
-        cv.GenerateID(): cv.declare_id(M5DialSonos),
+        cv.GenerateID(): cv.declare_id(LcdKnob),
         cv.Optional(CONF_SCREEN_OFF_TIME,     default=30000): cv.positive_int,
         cv.Optional(CONF_LONG_PRESS_DURATION, default=800):   cv.positive_int,
         cv.Required(CONF_SCREENS): cv.ensure_list(validate_screen),
@@ -129,6 +129,9 @@ async def to_code(config):
             )
 
     # ── Arduino library dependencies ──────────────────────────────────────────
+    # NOTE: M5Unified/M5Dial are used for hardware abstraction during the
+    # initial port.  These will be replaced with direct LovyanGFX + GPIO
+    # drivers once the Waveshare-specific bring-up is complete.
     cg.add_library("m5stack/M5Unified", "0.2.2")
     cg.add_library("m5stack/M5Dial",    "1.0.2")
 

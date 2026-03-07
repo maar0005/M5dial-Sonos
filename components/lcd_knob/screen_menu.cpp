@@ -2,7 +2,7 @@
 #include <M5Dial.h>
 
 namespace esphome {
-namespace m5dial_sonos {
+namespace lcd_knob {
 
 void MenuScreen::set_groups(const std::vector<std::string> &names) {
   names_     = names;
@@ -84,5 +84,5 @@ void MenuScreen::draw() {
   }
 }
 
-}  // namespace m5dial_sonos
+}  // namespace lcd_knob
 }  // namespace esphome

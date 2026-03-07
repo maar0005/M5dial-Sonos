@@ -5,10 +5,10 @@
 #include <vector>
 
 namespace esphome {
-namespace m5dial_sonos {
+namespace lcd_knob {
 
 // ── Shared Sonos playback state ───────────────────────────────────────────────
-// Owned by M5DialSonos. All three Sonos screens hold a pointer to this.
+// Owned by LcdKnob. All three Sonos screens hold a pointer to this.
 struct SonosState {
   std::string entity;
   std::vector<std::string> playlist_names;
@@ -60,5 +60,5 @@ class SonosVolumeScreen : public Screen {
   int         volume_step_;
 };
 
-}  // namespace m5dial_sonos
+}  // namespace lcd_knob
 }  // namespace esphome

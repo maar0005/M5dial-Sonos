@@ -4,7 +4,7 @@
 #include <string>
 
 namespace esphome {
-namespace m5dial_sonos {
+namespace lcd_knob {
 
 // ── Meater+ probe temperature screen ─────────────────────────────────────────
 //
@@ -47,5 +47,5 @@ class MeaterScreen : public Screen {
   bool  has_target_{false};
 };
 
-}  // namespace m5dial_sonos
+}  // namespace lcd_knob
 }  // namespace esphome

@@ -9,7 +9,7 @@
 #include <string>
 
 namespace esphome {
-namespace m5dial_sonos {
+namespace lcd_knob {
 
 // ── Screen group ──────────────────────────────────────────────────────────────
 // A named collection of pages (screens).  Long press cycles within the group.
@@ -33,7 +33,7 @@ struct ScreenConfig {
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
-class M5DialSonos : public Component {
+class LcdKnob : public Component {
  public:
   // ── ESPHome lifecycle ──────────────────────────────────────────────────────
   void  setup() override;
@@ -122,5 +122,5 @@ class M5DialSonos : public Component {
   void    draw_mode_dots();
 };
 
-}  // namespace m5dial_sonos
+}  // namespace lcd_knob
 }  // namespace esphome

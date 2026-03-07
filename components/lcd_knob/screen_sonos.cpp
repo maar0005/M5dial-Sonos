@@ -2,7 +2,7 @@
 #include <M5Dial.h>
 
 namespace esphome {
-namespace m5dial_sonos {
+namespace lcd_knob {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SonosPlaylistScreen
@@ -129,5 +129,5 @@ void SonosVolumeScreen::draw() {
   dsp.drawString(buf, CENTER_X, CENTER_Y);
 }
 
-}  // namespace m5dial_sonos
+}  // namespace lcd_knob
 }  // namespace esphome

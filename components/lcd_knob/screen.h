@@ -4,7 +4,7 @@
 #include <cstdint>
 
 namespace esphome {
-namespace m5dial_sonos {
+namespace lcd_knob {
 
 // ── Shared RGB565 colour palette ──────────────────────────────────────────────
 static constexpr uint16_t COL_BG      = 0x18E3;  // #1A1A1A dark background
@@ -49,5 +49,5 @@ class Screen {
   bool dirty_{true};
 };
 
-}  // namespace m5dial_sonos
+}  // namespace lcd_knob
 }  // namespace esphome

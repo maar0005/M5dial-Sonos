@@ -2,7 +2,7 @@
 #include <M5Dial.h>
 
 namespace esphome {
-namespace m5dial_sonos {
+namespace lcd_knob {
 
 void screen_draw_clipped(int32_t x, int32_t y, const std::string &text,
                          int max_width, uint32_t color, const void *font) {
@@ -25,5 +25,5 @@ void screen_draw_clipped(int32_t x, int32_t y, const std::string &text,
   dsp.drawString(t.c_str(), x, y);
 }
 
-}  // namespace m5dial_sonos
+}  // namespace lcd_knob
 }  // namespace esphome
