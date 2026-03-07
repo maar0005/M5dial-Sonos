@@ -1,37 +1,65 @@
-# M5Stack Dial — Sonos Playlist Controller
+# Waveshare LCD Knob — ESPHome Home Assistant Controller
 
-An [ESPHome](https://esphome.io) firmware for the **M5Stack Dial** that turns the device into a physical Sonos controller, using your Sonos favourites list as a playlist menu.
+An [ESPHome](https://esphome.io) firmware for the **Waveshare ESP32-S3 LCD Knob** that turns the device into a modular Home Assistant controller.  Out of the box it works as a Sonos media player, with additional screens (Meater+ probe thermometer, and more) that can be enabled with a single `used: true` flag.
 
-> **ESPHome ≥ 2024.2 required** (LVGL display framework support)
-
----
-
-## What this is
-
-The M5Stack Dial sits on your desk or wall.  Turn the encoder to browse your Sonos favourites, press to play with shuffle.  Long-press the main button to cycle between three modes:
-
-| Mode | Display | Encoder | Short press |
-|------|---------|---------|-------------|
-| **Playlist** | Favourite name + index | Browse favourites | Play selected + shuffle |
-| **Now Playing** | Track title + artist, play state | Skip ▶▶ / ◀◀ | Play/pause |
-| **Volume** | Arc + percentage | ±2 % per click | Play/pause |
-
-The Sonos favourites list is pulled **automatically** from Home Assistant — no manual configuration beyond pointing the device at your media player entity.
+> **ESPHome ≥ 2024.2 required**
 
 ---
 
-## Hardware required
+## Hardware
 
-**Exactly: M5Stack Dial** (model M5DIAL-S3)
+**Waveshare ESP32-S3-LCD-Knob**
 
 - ESP32-S3, 8 MB flash
-- GC9A01A 240×240 round SPI display
+- 240×240 round display (GC9A01A, SPI)
 - EC11 rotary encoder with push button
-- PCF8563 hardware RTC
-- RC522 NFC reader (I2C, present on board — initialised but not used by this firmware)
+- CST816S capacitive touch panel
 - Passive buzzer
 
-This firmware will **not** work on M5Stack Core, M5Stick, M5Atom, or any other M5Stack product — the pin assignments are specific to the Dial.
+> **Note:** the current firmware still uses the M5Unified / M5Dial Arduino libraries for hardware abstraction while the native Waveshare display and touch bring-up is completed.  A full migration to direct LovyanGFX + GPIO drivers is in progress on the `claude/esp32-s3-migration-plan` branch.
+
+---
+
+## Navigation
+
+```
+Double-tap screen  →  open / close MENU
+
+In MENU
+  Encoder          →  highlight a group (Sonos / Meater / …)
+  Short press      →  enter highlighted group
+  Long press       →  cancel, return to current screen
+
+In a group
+  Long press       →  cycle pages within group
+                       Sonos: Playlist → Now Playing → Volume → (wrap)
+  Encoder          →  page-specific (scroll playlist, skip track, change volume)
+  Short press      →  page-specific (play playlist, play/pause)
+  Double-tap       →  open MENU
+```
+
+---
+
+## Screens
+
+### Sonos (3 pages)
+
+| Page | Display | Encoder | Short press |
+|------|---------|---------|-------------|
+| **Playlist** | Favourite name carousel | Browse favourites | Play selected + shuffle |
+| **Now Playing** | Track title + artist, play/pause icon | Skip ▶▶ / ◀◀ | Play/pause |
+| **Volume** | Arc + percentage | ±2 % per click | Play/pause |
+
+### Meater+ probe
+
+Displays the internal probe temperature, a progress arc toward the target temperature, and the ambient temperature.  Requires a Meater+ integrated in Home Assistant.
+
+### Adding your own screen
+
+1. Create `components/lcd_knob/screen_foo.h` and `screen_foo.cpp` implementing the `Screen` base class.
+2. Add `ScreenKind::FOO` and `configure_foo(…)` to `lcd_knob.h/.cpp`.
+3. Add the type to `__init__.py`'s `SCREEN_TYPE_SCHEMAS`.
+4. In `lcd-knob.yaml` add a `- type: foo` entry under `screens:`.
 
 ---
 
@@ -39,163 +67,103 @@ This firmware will **not** work on M5Stack Core, M5Stick, M5Atom, or any other M
 
 ### 1. Prerequisites
 
-- Home Assistant with the [ESPHome add-on](https://esphome.io/guides/getting_started_hassio.html) installed, **or** the [ESPHome CLI](https://esphome.io/guides/getting_started_command_line.html) on your computer.
-- Sonos already integrated in Home Assistant (Settings → Devices & Services → Add integration → Sonos).
-- USB-C cable for first flash.
+- Home Assistant with the [ESPHome add-on](https://esphome.io/guides/getting_started_hassio.html), or the [ESPHome CLI](https://esphome.io/guides/getting_started_command_line.html).
+- Sonos integrated in Home Assistant (Settings → Devices & Services → Sonos).
+- USB-C cable for the first flash.
 
-### 2. Find your Sonos entity ID
-
-1. In Home Assistant go to **Settings → Devices & Services → Entities**.
-2. Filter by "media_player" and locate your Sonos speaker (e.g. `media_player.living_room`).
-3. Note the entity ID — you will put it in the substitution below.
-
-### 3. Configure
-
-Clone or download this repository, then:
+### 2. Clone and configure
 
 ```bash
+git clone https://github.com/maar0005/lcd-knob-ha
+cd lcd-knob-ha
 cp secrets.yaml.example secrets.yaml
 ```
 
 Edit `secrets.yaml`:
 
 ```yaml
-wifi_ssid: "MyNetwork"
-wifi_password: "s3cr3t"
-ota_password: "choose_a_password"
-api_encryption_key: "base64_32_byte_key"   # generate: esphome config generate-key
+wifi_ssid:          "MyNetwork"
+wifi_password:      "s3cr3t"
+ota_password:       "choose_a_password"
+api_encryption_key: "base64_32_byte_key"   # esphome config generate-key
 ```
 
-Edit the `substitutions` block at the top of `m5dial-sonos.yaml`:
+Edit the **CONFIGURATION** block at the very top of `lcd-knob.yaml` — that is the only section you need to touch:
 
 ```yaml
 substitutions:
-  sonos_entity: "media_player.living_room"   # ← your entity ID here
-  timezone: "Europe/Copenhagen"              # ← your IANA timezone
+  device_name:   "lcd-knob"
+  friendly_name: "LCD Knob"
+  timezone:      "Europe/Copenhagen"   # ← your timezone
+  sonos_entity:  "media_player.living_room"  # ← your entity ID
+  volume_step:   "2"
+  screen_off_time:     "30000"
+  long_press_duration: "800ms"
 ```
 
-Everything else can stay at its default value.
+To enable the Meater screen, also set:
 
-### 4. Flash
+```yaml
+  meater_entity_temperature: "sensor.meater_probe_1_internal_temperature"
+  meater_entity_target:      "sensor.meater_probe_1_target_temperature"
+  meater_entity_ambient:     "sensor.meater_probe_1_ambient_temperature"
+```
 
-**Via ESPHome Dashboard (recommended for first flash)**
+Then under `screens:` set `used: true` for Meater, and uncomment the matching `sensor:` subscription block.
 
-1. Copy `m5dial-sonos.yaml` and `secrets.yaml` into your ESPHome config folder.
-2. Open the Dashboard → click the three-dot menu on the new device → **Install → Plug into this computer**.
-3. Follow the on-screen steps.
-
-**Via CLI**
+### 3. Flash
 
 ```bash
 # First flash over USB
-esphome run m5dial-sonos.yaml
+esphome run lcd-knob.yaml
 
-# Subsequent updates over Wi-Fi (OTA)
-esphome run m5dial-sonos.yaml --device <ip-address>
+# Subsequent OTA updates
+esphome run lcd-knob.yaml --device <ip-address>
 ```
 
----
-
-## Modes explained
-
-```
-Long press (≥ 800 ms) on the main button → cycle mode
-Short press  (< 800 ms)                  → mode action
-```
-
-```
-MODE 0 — PLAYLIST
-┌──────────────────────────┐
-│           ♫              │  ← music note icon
-│                          │
-│     Jazz Classics        │  ← favourite name (scrolls if long)
-│                          │
-│         2 / 7            │  ← index / total
-│                     ● ○ ○│  ← mode indicator dots
-└──────────────────────────┘
-  Rotate: browse   Press: play + shuffle
-
-MODE 1 — NOW PLAYING
-┌──────────────────────────┐
-│           ▶              │  ← live play/pause icon
-│                          │
-│   So What                │  ← track title (auto-scrolls)
-│   Miles Davis            │  ← artist name
-│                     ○ ● ○│
-└──────────────────────────┘
-  Rotate: skip tracks   Press: play/pause
-
-MODE 2 — VOLUME
-┌──────────────────────────┐
-│         Volume           │
-│  ╔═══════════════════╗   │
-│  ║       45%         ║   │  ← arc + percentage
-│  ╚═══════════════════╝   │
-│                     ○ ○ ●│
-└──────────────────────────┘
-  Rotate: ±2 %   Press: play/pause
-```
-
-**Screensaver:** after 30 seconds of inactivity the backlight dims to 10 %.  Any encoder turn or button press wakes it instantly.
-
----
-
-## How Sonos favourites are pulled
-
-The firmware subscribes to the `source_list` attribute of your `sonos_entity` via the Home Assistant native API.  This attribute contains all your Sonos favourites and is updated by HA in real time whenever you add or remove items in the Sonos app.
-
-No extra YAML configuration of the favourites is needed — just point the device at the right entity ID and the list appears automatically on the dial.
-
----
-
-## Troubleshooting
-
-### `source_list` is empty / "No favourites found" on the display
-
-1. Check that you have favourites saved in the Sonos app (heart/save icon on a station or playlist).
-2. Confirm the `sonos_entity` substitution matches exactly (copy-paste from HA Entities page — it is case-sensitive).
-3. Open ESPHome logs (`esphome logs m5dial-sonos.yaml`) and look for lines tagged `[sonos]`.  You should see `"Parsed N playlists from source_list"`.
-4. Make sure `homeassistant_states: true` is present in the `api:` block — without it, attribute subscriptions will silently do nothing.
-
-### Display shows inverted colours or wrong colours
-
-The GC9A01A on the M5Stack Dial requires `color_order: bgr` and `invert_colors: true`.  Both are set in the config.  If you still see inverted colours, double-check that no other include or package is overriding these settings.
-
-### Button timing feels wrong
-
-Adjust the `long_press_duration` substitution (default `800ms`).  Lower values (e.g. `600ms`) make mode changes easier to trigger; higher values (e.g. `1000ms`) require a more deliberate hold.
-
-### RTC shows the wrong time on first boot
-
-On first boot the RTC syncs from Home Assistant.  If HA is not yet connected, the RTC may briefly show 2000-01-01.  Once the API connects, time syncs automatically and is written to the hardware RTC.  Check that the `timezone` substitution is a valid IANA timezone string (e.g. `"America/New_York"`).
-
-### Build error about missing fonts
-
-ESPHome downloads Montserrat from Google Fonts on first build — internet access is required.  If your build environment is offline, download [Montserrat-Regular.ttf](https://fonts.google.com/specimen/Montserrat), place it in a `fonts/` folder next to this YAML, and change the `file:` paths in the `font:` section from `"gfonts://Montserrat-Regular"` to `"fonts/Montserrat-Regular.ttf"`.
-
-### OTA update fails
-
-1. Confirm the device is reachable: `ping <ip-address>`.
-2. Verify `ota_password` in `secrets.yaml` matches the value used during the initial flash.
-3. Try re-flashing over USB if OTA is completely broken.
+Or copy the YAML + secrets into your ESPHome Dashboard and flash from there.
 
 ---
 
 ## File overview
 
-| File | Purpose |
+| Path | Purpose |
 |------|---------|
-| `m5dial-sonos.yaml` | Main ESPHome configuration |
-| `secrets.yaml.example` | Template for credentials — copy to `secrets.yaml` |
-| `ha_automation_example.yaml` | Optional HA automations that react to dial activity |
-| `.gitignore` | Keeps `secrets.yaml` and build artefacts out of git |
+| `lcd-knob.yaml` | Main ESPHome config — user settings at the top |
+| `secrets.yaml.example` | Credentials template — copy to `secrets.yaml` |
+| `components/lcd_knob/` | Custom ESPHome component |
+| `components/lcd_knob/__init__.py` | ESPHome schema + code generation |
+| `components/lcd_knob/lcd_knob.h/.cpp` | Orchestrator: screen list, input routing, touch detection |
+| `components/lcd_knob/screen.h/.cpp` | Abstract `Screen` base + shared colours + draw helper |
+| `components/lcd_knob/screen_menu.h/.cpp` | MENU carousel screen |
+| `components/lcd_knob/screen_sonos.h/.cpp` | Playlist, Now Playing, Volume screens (share `SonosState`) |
+| `components/lcd_knob/screen_meater.h/.cpp` | Meater+ probe temperature screen |
+| `ha_automation_example.yaml` | Optional HA automations that react to knob activity |
+
+---
+
+## Troubleshooting
+
+**"No favourites" on the Playlist screen**
+1. Confirm you have favourites saved in the Sonos app.
+2. Check that `sonos_entity` matches exactly the HA entity ID (Settings → Entities).
+3. Run `esphome logs lcd-knob.yaml` and look for `[lcd_knob]` lines.
+4. Verify `homeassistant_states: true` is in the `api:` block.
+
+**Button timing feels off**
+Adjust `long_press_duration` in the substitutions block (default `800ms`).
+
+**Backlight never dims**
+Set `screen_off_time` to a positive number of milliseconds (e.g. `30000` = 30 s).
+
+**OTA fails**
+Verify `ota_password` in `secrets.yaml` matches the value used on first flash.  Re-flash over USB if OTA is completely broken.
 
 ---
 
 ## Contributing
 
 Issues and pull requests welcome.  When reporting a bug please include:
-
 - ESPHome version (`esphome version`)
-- Relevant lines from the ESPHome logs
-- What you expected vs what happened
+- Relevant lines from `esphome logs lcd-knob.yaml`
+- Expected vs actual behaviour
