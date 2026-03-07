@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# M5Stack Dial — Sonos Playlist Controller
+# M5Stack Dial — Modular screen controller
 # ESPHome configuration using M5 library + LovyanGFX for display
 #
 # Hardware: M5Stack Dial (ESP32-S3)
@@ -11,14 +11,15 @@
 #
 # ─── Quick-start ─────────────────────────────────────────────────────────────
 #  1. Copy secrets.yaml.example → secrets.yaml and fill in your values.
-#  2. Change `sonos_entity` below to your media_player entity ID.
-#  3. For multiple dials, give each a unique `device_name` (e.g. sonos-dial-kitchen).
+#  2. Set your entity IDs in the screens: list below.
+#  3. To enable a screen set  used: true  and add the matching sensor
+#     subscription in the sensor/text_sensor sections.
 #  4. Flash: esphome run m5dial-sonos.yaml
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SUBSTITUTIONS
+# SUBSTITUTIONS — change these for your setup
 # ─────────────────────────────────────────────────────────────────────────────
 substitutions:
   device_name: "sonos-dial"
@@ -67,13 +68,32 @@ external_components:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# M5DIAL SONOS — Custom display + UI component
+# M5DIAL SONOS — Screen list
+#
+# Add screens in the order you want to cycle through them (long-press to advance).
+# Set  used: false  to exclude a screen without deleting its config.
 # ─────────────────────────────────────────────────────────────────────────────
 m5dial_sonos:
   id: sonos_ui
-  sonos_entity: "${sonos_entity}"
   screen_off_time: ${screen_off_time}
-  volume_step: 2
+  long_press_duration: 800
+
+  screens:
+    # ── Sonos media player ──────────────────────────────────────────────
+    # Adds three sequential screens: Playlist browser → Now Playing → Volume.
+    - type: sonos
+      used: true
+      entity: "${sonos_entity}"
+      volume_step: 2
+
+    # ── Meater+ probe thermometer ───────────────────────────────────────
+    # Shows internal temp, target arc, and ambient.
+    # Requires the sensor: subscriptions below (search for "MEATER").
+    - type: meater
+      used: false
+      entity_temperature: "sensor.meater_probe_1_internal_temperature"
+      entity_target:      "sensor.meater_probe_1_target_temperature"
+      entity_ambient:     "sensor.meater_probe_1_ambient_temperature"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -151,10 +171,9 @@ sensor:
       then:
         - lambda: 'id(sonos_ui).on_rotary_cw();'
         - lambda: |-
-            int mode = id(sonos_ui).get_mode();
-            if (mode == 1) {
+            if (id(sonos_ui).is_sonos_now_playing()) {
               id(action_next_track).execute();
-            } else if (mode == 2) {
+            } else if (id(sonos_ui).is_sonos_volume()) {
               id(action_set_volume).execute();
             }
 
@@ -162,12 +181,30 @@ sensor:
       then:
         - lambda: 'id(sonos_ui).on_rotary_ccw();'
         - lambda: |-
-            int mode = id(sonos_ui).get_mode();
-            if (mode == 1) {
+            if (id(sonos_ui).is_sonos_now_playing()) {
               id(action_prev_track).execute();
-            } else if (mode == 2) {
+            } else if (id(sonos_ui).is_sonos_volume()) {
               id(action_set_volume).execute();
             }
+
+  # ── MEATER sensors — uncomment when meater used: true ──────────────────────
+  # - platform: homeassistant
+  #   entity_id: sensor.meater_probe_1_internal_temperature
+  #   on_value:
+  #     then:
+  #       - lambda: 'id(sonos_ui).set_meater_temperature(x);'
+  #
+  # - platform: homeassistant
+  #   entity_id: sensor.meater_probe_1_target_temperature
+  #   on_value:
+  #     then:
+  #       - lambda: 'id(sonos_ui).set_meater_target(x);'
+  #
+  # - platform: homeassistant
+  #   entity_id: sensor.meater_probe_1_ambient_temperature
+  #   on_value:
+  #     then:
+  #       - lambda: 'id(sonos_ui).set_meater_ambient(x);'
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -182,21 +219,21 @@ binary_sensor:
     id: main_button
     name: "${friendly_name} Button"
     on_multi_click:
-      # Short press
+      # Short press — action depends on current screen
       - timing:
           - ON for at most ${long_press_duration}
           - OFF for at least 50ms
         then:
           - lambda: 'id(sonos_ui).on_short_press();'
           - lambda: |-
-              int mode = id(sonos_ui).get_mode();
-              if (mode == 0) {
+              if (id(sonos_ui).is_sonos_playlist()) {
                 id(action_play_playlist).execute();
-              } else {
+              } else if (id(sonos_ui).is_sonos_now_playing() || id(sonos_ui).is_sonos_volume()) {
                 id(action_play_pause).execute();
               }
+              // Meater screen: short press is a no-op (read-only display)
 
-      # Long press — cycle mode
+      # Long press — advance to next screen (with beep)
       - timing:
           - ON for at least ${long_press_duration}
         then:
@@ -205,10 +242,10 @@ binary_sensor:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TEXT SENSORS — Live attribute subscriptions from Home Assistant
+# TEXT SENSORS — Sonos attribute subscriptions from Home Assistant
 # ─────────────────────────────────────────────────────────────────────────────
 text_sensor:
-  # ── source_list — JSON array of Sonos favourites ───────────────────
+  # ── source_list — JSON array of Sonos favourites ───────────────────────────
   - platform: homeassistant
     id: ts_source_list
     entity_id: "${sonos_entity}"
@@ -217,7 +254,7 @@ text_sensor:
       then:
         - lambda: 'id(sonos_ui).set_playlist_json(x);'
 
-  # ── media_title ────────────────────────────────────────────────────
+  # ── media_title ────────────────────────────────────────────────────────────
   - platform: homeassistant
     id: ts_media_title
     entity_id: "${sonos_entity}"
@@ -226,7 +263,7 @@ text_sensor:
       then:
         - lambda: 'id(sonos_ui).set_media_title(x);'
 
-  # ── media_artist ───────────────────────────────────────────────────
+  # ── media_artist ───────────────────────────────────────────────────────────
   - platform: homeassistant
     id: ts_media_artist
     entity_id: "${sonos_entity}"
@@ -235,7 +272,7 @@ text_sensor:
       then:
         - lambda: 'id(sonos_ui).set_media_artist(x);'
 
-  # ── volume_level — float string "0.45" (0.0–1.0) ──────────────────
+  # ── volume_level — float string "0.45" (0.0–1.0) ──────────────────────────
   - platform: homeassistant
     id: ts_volume_level
     entity_id: "${sonos_entity}"
@@ -244,7 +281,7 @@ text_sensor:
       then:
         - lambda: 'id(sonos_ui).set_volume_level(atof(x.c_str()));'
 
-  # ── entity_picture — album art URL (unused for now) ────────────────
+  # ── entity_picture — album art URL (unused for now) ───────────────────────
   - platform: homeassistant
     id: ts_entity_picture
     entity_id: "${sonos_entity}"
@@ -253,9 +290,9 @@ text_sensor:
       then:
         - lambda: |-
             if (x.empty()) return;
-            ESP_LOGI("sonos", "Album art URL received (not rendered): %s", x.c_str());
+            ESP_LOGI("sonos", "Album art URL (not rendered): %s", x.c_str());
 
-  # ── player state — "playing" | "paused" | "idle" | "off" ──────────
+  # ── player state — "playing" | "paused" | "idle" | "off" ─────────────────
   - platform: homeassistant
     id: ts_player_state
     entity_id: "${sonos_entity}"
@@ -265,11 +302,11 @@ text_sensor:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SCRIPTS — HA service calls only
+# SCRIPTS — HA service calls (Sonos actions)
 # ─────────────────────────────────────────────────────────────────────────────
 script:
 
-  # ── action_play_playlist ────────────────────────────────────────────
+  # ── action_play_playlist ───────────────────────────────────────────────────
   - id: action_play_playlist
     then:
       - lambda: |-
@@ -279,7 +316,7 @@ script:
                    id(pending_playlist_name).c_str());
       - script.execute: do_select_source
 
-  # ── do_select_source ────────────────────────────────────────────────
+  # ── do_select_source ──────────────────────────────────────────────────────
   - id: do_select_source
     then:
       - homeassistant.service:
@@ -296,7 +333,7 @@ script:
             entity_id: "${sonos_entity}"
             shuffle: "true"
 
-  # ── action_play_pause ───────────────────────────────────────────────
+  # ── action_play_pause ─────────────────────────────────────────────────────
   - id: action_play_pause
     then:
       - homeassistant.service:
@@ -304,7 +341,7 @@ script:
           data:
             entity_id: "${sonos_entity}"
 
-  # ── action_next_track ───────────────────────────────────────────────
+  # ── action_next_track ─────────────────────────────────────────────────────
   - id: action_next_track
     then:
       - homeassistant.service:
@@ -312,7 +349,7 @@ script:
           data:
             entity_id: "${sonos_entity}"
 
-  # ── action_prev_track ───────────────────────────────────────────────
+  # ── action_prev_track ─────────────────────────────────────────────────────
   - id: action_prev_track
     then:
       - homeassistant.service:
@@ -320,7 +357,7 @@ script:
           data:
             entity_id: "${sonos_entity}"
 
-  # ── action_set_volume ───────────────────────────────────────────────
+  # ── action_set_volume ─────────────────────────────────────────────────────
   - id: action_set_volume
     then:
       - homeassistant.service:

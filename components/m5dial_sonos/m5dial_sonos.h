@@ -1,85 +1,104 @@
 #pragma once
 
 #include "esphome/core/component.h"
-#include <string>
+#include "screen.h"
+#include "screen_sonos.h"
+#include "screen_meater.h"
 #include <vector>
+#include <string>
 
 namespace esphome {
 namespace m5dial_sonos {
 
-// UI modes
-enum Mode : uint8_t {
-  MODE_PLAYLIST = 0,
-  MODE_NOW_PLAYING = 1,
-  MODE_VOLUME = 2,
-  MODE_COUNT = 3,
+// ── Screen type tags (for ScreenKind ordering) ────────────────────────────────
+enum class ScreenKind : uint8_t { SONOS, MEATER };
+
+struct ScreenConfig {
+  ScreenKind kind;
+  // Sonos
+  std::string sonos_entity;
+  int         sonos_volume_step{2};
+  // Meater
+  std::string meater_entity_temp;
+  std::string meater_entity_target;
+  std::string meater_entity_ambient;
 };
 
 class M5DialSonos : public Component {
  public:
-  // ── ESPHome lifecycle ──────────────────────────────────────────────
+  // ── ESPHome lifecycle ──────────────────────────────────────────────────────
   void setup() override;
-  void loop() override;
+  void loop()  override;
   float get_setup_priority() const override;
 
-  // ── Config setters (called by generated code from __init__.py) ─────
-  void set_sonos_entity(const std::string &entity) { sonos_entity_ = entity; }
-  void set_screen_off_time(uint32_t ms) { screen_off_time_ = ms; }
+  // ── Global config ──────────────────────────────────────────────────────────
+  void set_screen_off_time   (uint32_t ms) { screen_off_time_    = ms; }
   void set_long_press_duration(uint32_t ms) { long_press_duration_ = ms; }
-  void set_volume_step(int step) { volume_step_ = step; }
 
-  // ── State setters (called by YAML text_sensor on_value lambdas) ────
-  void set_playlist_json(const std::string &json);
-  void set_media_title(const std::string &title);
-  void set_media_artist(const std::string &artist);
-  void set_volume_level(float level);
-  void set_player_state(const std::string &state);
+  // ── Screen declarations (called in order from generated code) ─────────────
+  // Adds three Sonos screens (Playlist, NowPlaying, Volume) to the list.
+  void configure_sonos(const std::string &entity, int volume_step);
+  // Adds one Meater screen. Empty strings for unused entities.
+  void configure_meater(const std::string &entity_temp,
+                        const std::string &entity_target,
+                        const std::string &entity_ambient);
 
-  // ── State getters (read by YAML lambdas for HA service calls) ──────
-  int get_mode() const { return mode_; }
-  int get_playlist_count() const { return playlist_names_.size(); }
+  // ── Sonos state setters — called from YAML text_sensor lambdas ────────────
+  void set_playlist_json (const std::string &json);
+  void set_media_title   (const std::string &title);
+  void set_media_artist  (const std::string &artist);
+  void set_volume_level  (float level);
+  void set_player_state  (const std::string &state);
+
+  // ── Sonos getters — used by YAML action scripts ───────────────────────────
+  float       get_volume()               const;
+  int         get_playlist_count()       const;
   std::string get_current_playlist_name() const;
-  float get_volume() const { return volume_; }
-  bool is_playing() const { return is_playing_; }
 
-  // ── Input handlers (called by YAML rotary/button lambdas) ──────────
+  // ── Screen-type queries — for YAML action dispatching ─────────────────────
+  bool is_sonos_playlist()   const;
+  bool is_sonos_now_playing() const;
+  bool is_sonos_volume()     const;
+  bool is_meater()           const;
+
+  // ── Meater state setters — called from YAML sensor lambdas ───────────────
+  void set_meater_temperature(float t);
+  void set_meater_target     (float t);
+  void set_meater_ambient    (float t);
+
+  // ── Input handlers — called from YAML rotary / button lambdas ────────────
   void on_rotary_cw();
   void on_rotary_ccw();
   void on_short_press();
   void on_long_press();
-
-  // ── Display control ────────────────────────────────────────────────
   void wake_screen();
 
- protected:
-  // ── Drawing methods ────────────────────────────────────────────────
-  void refresh_display();
-  void draw_page_playlist();
-  void draw_page_now_playing();
-  void draw_page_volume();
-  void draw_mode_dots(uint8_t active);
-  void draw_clipped_string(int32_t x, int32_t y, const std::string &text,
-                           int max_width, uint32_t color, const void *font);
+ private:
+  // ── Config queue (populated before setup()) ────────────────────────────────
+  std::vector<ScreenConfig> screen_configs_;
 
-  // ── Configuration ──────────────────────────────────────────────────
-  std::string sonos_entity_;
-  uint32_t screen_off_time_{30000};
+  // ── Runtime ────────────────────────────────────────────────────────────────
+  std::vector<Screen *> screens_;
+  size_t current_{0};
+
+  // Typed pointers for state forwarding (null if not configured)
+  SonosState          sonos_state_;
+  SonosPlaylistScreen   *sonos_playlist_  {nullptr};
+  SonosNowPlayingScreen *sonos_now_playing_{nullptr};
+  SonosVolumeScreen     *sonos_volume_    {nullptr};
+  MeaterScreen          *meater_          {nullptr};
+
+  // ── Display state ──────────────────────────────────────────────────────────
+  uint32_t screen_off_time_    {30000};
   uint32_t long_press_duration_{800};
-  int volume_step_{2};
+  uint32_t last_interaction_   {0};
+  bool     screen_dimmed_      {false};
 
-  // ── State ──────────────────────────────────────────────────────────
-  Mode mode_{MODE_PLAYLIST};
-  std::vector<std::string> playlist_names_;
-  int playlist_index_{0};
-  float volume_{0.0f};
-  bool is_playing_{false};
-  std::string media_title_{"—"};
-  std::string media_artist_;
+  static constexpr uint8_t BRIGHTNESS_FULL = 100;
+  static constexpr uint8_t BRIGHTNESS_DIM  = 25;
 
-  // ── Display state ──────────────────────────────────────────────────
-  bool display_dirty_{true};
-  bool screen_dimmed_{false};
-  uint32_t last_interaction_{0};
+  void next_screen();
+  void draw_mode_dots();
 };
 
 }  // namespace m5dial_sonos
