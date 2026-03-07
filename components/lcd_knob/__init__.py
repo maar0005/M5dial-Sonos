@@ -83,7 +83,9 @@ def validate_screen(value):
         extra=cv.ALLOW_EXTRA,
     )
     # Merge base and type-specific validation results
-    validated = {**base_schema(value), **SCREEN_TYPE_SCHEMAS[t](value)}
+    base_keys = {CONF_TYPE, CONF_USED}
+    type_value = {k: v for k, v in value.items() if k not in base_keys}
+    validated = {**base_schema(value), **SCREEN_TYPE_SCHEMAS[t](type_value)}
     return validated
 
 
