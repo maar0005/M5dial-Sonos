@@ -6,10 +6,6 @@
 namespace esphome {
 namespace lcd_knob {
 
-// ── Off-screen canvas for compositing album art ───────────────────────────────
-// Allocated once on first draw; lives in PSRAM (240×240×2 = ~113 KB).
-static M5Canvas *s_art_canvas = nullptr;
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // SonosPlaylistScreen
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -78,80 +74,47 @@ void SonosPlaylistScreen::draw() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SonosNowPlayingScreen — helpers
+// SonosNowPlayingScreen
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Draw play/pause indicator into a canvas at top-centre.
-static void draw_play_pause(M5Canvas &c, bool is_playing) {
-  const int cx = CENTER_X, cy = 30;
-  if (is_playing) {
-    c.fillRect(cx - 11, cy - 10, 7, 20, COL_ORANGE);
-    c.fillRect(cx +  4, cy - 10, 7, 20, COL_ORANGE);
-  } else {
-    c.fillTriangle(cx - 10, cy - 11, cx - 10, cy + 11, cx + 12, cy, COL_ORANGE);
-  }
-}
-
-// Draw text with 1 px drop-shadow onto a canvas (transparent background).
-static void canvas_text_shadow(M5Canvas &c, int32_t x, int32_t y,
-                                const std::string &t, uint32_t color) {
-  c.setTextDatum(middle_center);
-  c.setTextColor(0x0000);          // black shadow
-  c.drawString(t.c_str(), x + 1, y + 1);
-  c.setTextColor(color);           // main text (transparent bg)
-  c.drawString(t.c_str(), x, y);
-}
-
-// ── Art mode ──────────────────────────────────────────────────────────────────
+// ── Art mode — drawn directly to display, no off-screen buffer needed ─────────
 
 void SonosNowPlayingScreen::draw_art_mode_() {
   auto &dsp = M5Dial.Display;
 
-  // Lazy-create the compositing canvas (lives for the lifetime of the firmware)
-  if (!s_art_canvas) {
-    s_art_canvas = new M5Canvas(&dsp);
-    s_art_canvas->setColorDepth(16);
-    s_art_canvas->createSprite(240, 240);
+  // 1. Decode and scale JPEG directly onto the display (no canvas required)
+  dsp.drawJpg(state_->album_art_data.data(),
+               state_->album_art_data.size(),
+               0, 0, 240, 240);
+
+  // 2. Solid dark bar at bottom for text contrast — covers rows 168–239
+  dsp.fillRect(0, 168, 240, 72, 0x0000);
+  dsp.drawFastHLine(0, 168, 240, COL_GREY_33);  // subtle top edge
+
+  // 3. Play / pause icon — dark halo first so it reads over any art colour
+  dsp.fillCircle(CENTER_X, 30, 17, 0x0000);
+  if (state_->is_playing) {
+    dsp.fillRect(CENTER_X - 10, 20, 7, 20, COL_ORANGE);
+    dsp.fillRect(CENTER_X +  3, 20, 7, 20, COL_ORANGE);
+  } else {
+    dsp.fillTriangle(CENTER_X - 9, 19, CENTER_X - 9, 40,
+                     CENTER_X + 11, 29, COL_ORANGE);
   }
 
-  // 1. Decode and scale album art into the canvas
-  s_art_canvas->drawJpg(state_->album_art_data.data(),
-                         state_->album_art_data.size(),
-                         0, 0, 240, 240);
-
-  // 2. Gradient overlay: rows 148–235 fade to black
-  //    Pixel-level blend toward black — fast in PSRAM (~15–25 ms)
-  for (int y = 148; y < 236; y++) {
-    const uint8_t blend   = (uint8_t)((y - 148) * 255 / 87);
-    const uint8_t inv     = 255 - blend;
-    for (int x = 0; x < 240; x++) {
-      uint16_t px = s_art_canvas->readPixel(x, y);
-      uint8_t r = (uint8_t)(((px >> 11) & 0x1F) * inv / 255);
-      uint8_t g = (uint8_t)(((px >>  5) & 0x3F) * inv / 255);
-      uint8_t b = (uint8_t)( (px        & 0x1F) * inv / 255);
-      s_art_canvas->writePixel(x, y, (uint16_t)((r << 11) | (g << 5) | b));
-    }
-  }
-  // Solid black strip at very bottom for text contrast
-  s_art_canvas->fillRect(0, 236, 240, 4, 0x0000);
-
-  // 3. Play / pause icon
-  draw_play_pause(*s_art_canvas, state_->is_playing);
-
-  // 4. Track title with shadow
-  s_art_canvas->setFont(&fonts::FreeSansBold12pt7b);
+  // 4. Track title in the dark bar
+  dsp.setTextDatum(middle_center);
+  dsp.setFont(&fonts::FreeSansBold12pt7b);
+  dsp.setTextColor(COL_WHITE, 0x0000);
   auto title = screen_clip_to_width(state_->media_title, 200,
                                      &fonts::FreeSansBold12pt7b);
-  canvas_text_shadow(*s_art_canvas, CENTER_X, 188, title, COL_WHITE);
+  dsp.drawString(title.c_str(), CENTER_X, 190);
 
-  // 5. Artist with shadow
-  s_art_canvas->setFont(&fonts::FreeSansBold9pt7b);
+  // 5. Artist below title
+  dsp.setFont(&fonts::FreeSansBold9pt7b);
+  dsp.setTextColor(COL_ORANGE, 0x0000);
   auto artist = screen_clip_to_width(state_->media_artist, 192,
                                       &fonts::FreeSansBold9pt7b);
-  canvas_text_shadow(*s_art_canvas, CENTER_X, 213, artist, COL_ORANGE);
-
-  // 6. Push canvas to display in one DMA burst
-  s_art_canvas->pushSprite(0, 0);
+  dsp.drawString(artist.c_str(), CENTER_X, 214);
 }
 
 // ── Fallback mode (no art yet) ────────────────────────────────────────────────
