@@ -35,18 +35,61 @@ substitutions:
   # ── Timezone ─────────────────────────────────────────────────────────────────
   timezone: "Europe/Copenhagen"      # IANA string, e.g. "America/New_York"
 
+  # ── Behaviour ─────────────────────────────────────────────────────────────────
+  screen_off_time:     "30000"   # ms until backlight dims when idle (0 = never)
+  long_press_duration: "800ms"   # button hold time to cycle pages / open menu
+
   # ── Sonos screen ─────────────────────────────────────────────────────────────
+  sonos_used:    "true"
   sonos_entity:  "media_player.living_room"   # HA media_player entity ID
   volume_step:   "2"                          # Volume % per encoder click (1–10)
+  # Base URL of your Home Assistant instance.
+  # Needed when album art is served via HA's media proxy (relative URLs).
+  # Spotify / internet radio streams usually provide absolute CDN URLs, so
+  # you can leave this blank in that case.
+  # Example: "http://homeassistant.local:8123"  or  "http://192.168.1.10:8123"
+  ha_url: ""
 
-  # ── Meater+ probe screen (only needed when meater  used: true  below) ────────
+  # ── Meater+ probe screen ──────────────────────────────────────────────────────
+  meater_used:               "false"
   meater_entity_temperature: "sensor.meater_probe_1_internal_temperature"
   meater_entity_target:      "sensor.meater_probe_1_target_temperature"
   meater_entity_ambient:     "sensor.meater_probe_1_ambient_temperature"
 
-  # ── Behaviour ─────────────────────────────────────────────────────────────────
-  screen_off_time:     "30000"   # ms until backlight dims when idle (0 = never)
-  long_press_duration: "800ms"   # button hold time to cycle pages / open menu
+  # ── Kitchen timer 1 ───────────────────────────────────────────────────────────
+  timer1_used:             "true"
+  timer1_default_duration: "5"     # minutes (1–99)
+
+  # ── Kitchen timer 2 ───────────────────────────────────────────────────────────
+  timer2_used:             "true"
+  timer2_default_duration: "10"    # minutes (1–99)
+
+  # ── Alarms ────────────────────────────────────────────────────────────────────
+  alarm1_used: "true"
+  alarm2_used: "true"
+
+  # ── Count-up timer ────────────────────────────────────────────────────────────
+  countup_used: "true"
+
+  # ── Light screens ─────────────────────────────────────────────────────────────
+  # Up to four lights are supported.  Set used to "false" to disable a slot.
+  # The name is optional — if blank the entity ID tail is used automatically
+  # (e.g. "light.kitchen_ceiling" → "KITCHEN CEILING").
+  light1_used:   "true"
+  light1_entity: "light.kitchen_ceiling"
+  light1_name:   "Ceiling"
+
+  light2_used:   "true"
+  light2_entity: "light.kitchen_counter"
+  light2_name:   "Counter"
+
+  light3_used:   "false"
+  light3_entity: "light.placeholder"
+  light3_name:   ""
+
+  light4_used:   "false"
+  light4_entity: "light.placeholder"
+  light4_name:   ""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -89,9 +132,8 @@ external_components:
 # ─────────────────────────────────────────────────────────────────────────────
 # LCD KNOB — Screen declarations
 #
-# Set  used: true  on every screen you want active.
-# The MENU lists each enabled group automatically.
-# Entity IDs come from the substitutions block above.
+# Enable/disable each screen via the substitutions above.
+# Entity IDs also come from the substitutions block.
 # ─────────────────────────────────────────────────────────────────────────────
 lcd_knob:
   id: knob
@@ -100,20 +142,70 @@ lcd_knob:
 
   screens:
     # ── Sonos media player ────────────────────────────────────────────────────
-    # Three pages: Playlist browser → Now Playing → Volume control
+    # Three pages: Playlist browser → Now Playing (album art) → Volume control
     - type: sonos
-      used: true
+      used: ${sonos_used}
       entity: "${sonos_entity}"
       volume_step: ${volume_step}
+      ha_url: "${ha_url}"
 
     # ── Meater+ probe thermometer ─────────────────────────────────────────────
     # Shows probe temp, progress arc toward target, and ambient temp.
-    # Set  used: true  and uncomment the sensor: block further below.
     - type: meater
-      used: false
+      used: ${meater_used}
       entity_temperature: "${meater_entity_temperature}"
       entity_target:      "${meater_entity_target}"
       entity_ambient:     "${meater_entity_ambient}"
+
+    # ── Kitchen timer 1 ───────────────────────────────────────────────────────
+    # Countdown timer. Rotary sets duration; short press starts/pauses;
+    # long press resets. Fires a HA binary_sensor when it reaches zero.
+    - type: timer
+      used: ${timer1_used}
+      default_duration: ${timer1_default_duration}
+
+    # ── Kitchen timer 2 ───────────────────────────────────────────────────────
+    - type: timer2
+      used: ${timer2_used}
+      default_duration: ${timer2_default_duration}
+
+    # ── Alarm 1 ───────────────────────────────────────────────────────────────
+    # Time-of-day alarm. Short press enters edit mode (hour → minute → save+arm).
+    # Long press disarms.
+    - type: alarm
+      used: ${alarm1_used}
+
+    # ── Alarm 2 ───────────────────────────────────────────────────────────────
+    - type: alarm2
+      used: ${alarm2_used}
+
+    # ── Count-up timer ────────────────────────────────────────────────────────
+    # Short press starts; long press resets.
+    - type: countup
+      used: ${countup_used}
+
+    # ── Light screens ─────────────────────────────────────────────────────────
+    # Rotary adjusts brightness (0 → off, 1–100 → on).
+    # Short press toggles on/off.
+    - type: light
+      used: ${light1_used}
+      entity: "${light1_entity}"
+      name:   "${light1_name}"
+
+    - type: light
+      used: ${light2_used}
+      entity: "${light2_entity}"
+      name:   "${light2_name}"
+
+    - type: light
+      used: ${light3_used}
+      entity: "${light3_entity}"
+      name:   "${light3_name}"
+
+    - type: light
+      used: ${light4_used}
+      entity: "${light4_entity}"
+      name:   "${light4_name}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -159,12 +251,18 @@ rtttl:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TIME — synced from Home Assistant
+# TIME — synced from Home Assistant + alarm check every minute
 # ─────────────────────────────────────────────────────────────────────────────
 time:
   - platform: homeassistant
     id: ha_time
     timezone: "${timezone}"
+    on_time:
+      - seconds: 0
+        then:
+          - lambda: |
+              auto t = id(ha_time).now();
+              if (t.is_valid()) id(knob).check_alarms(t.hour, t.minute);
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -178,7 +276,7 @@ globals:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SENSOR — Rotary encoder (GPIO40 = A, GPIO41 = B)
+# SENSOR — Rotary encoder + template sensors
 # ─────────────────────────────────────────────────────────────────────────────
 sensor:
   - platform: rotary_encoder
@@ -195,6 +293,8 @@ sensor:
               id(action_next_track).execute();
             } else if (id(knob).is_sonos_volume()) {
               id(action_set_volume).execute();
+            } else if (id(knob).is_light_pending()) {
+              id(push_light_state).execute();
             }
 
     on_anticlockwise:
@@ -205,7 +305,66 @@ sensor:
               id(action_prev_track).execute();
             } else if (id(knob).is_sonos_volume()) {
               id(action_set_volume).execute();
+            } else if (id(knob).is_light_pending()) {
+              id(push_light_state).execute();
             }
+
+  # ── Timer remaining (polls the on-device state every second) ─────────────────
+  - platform: template
+    name: "Timer 1 Remaining"
+    id: timer1_remaining
+    unit_of_measurement: "s"
+    update_interval: 1s
+    lambda: 'return (float)id(knob).get_timer_remaining();'
+
+  - platform: template
+    name: "Timer 2 Remaining"
+    id: timer2_remaining
+    unit_of_measurement: "s"
+    update_interval: 1s
+    lambda: 'return (float)id(knob).get_timer2_remaining();'
+
+  # ── Count-up elapsed ──────────────────────────────────────────────────────────
+  - platform: template
+    name: "Count Up Elapsed"
+    id: countup_elapsed
+    unit_of_measurement: "s"
+    update_interval: 1s
+    lambda: 'return (float)id(knob).get_countup_elapsed();'
+
+  # ── Light brightness — HA → device ────────────────────────────────────────────
+  # HA brightness is 0–255; the component expects 0–100 %.
+  - platform: homeassistant
+    id: light1_brightness_sensor
+    entity_id: "${light1_entity}"
+    attribute: brightness
+    on_value:
+      then:
+        - lambda: 'id(knob).on_light_brightness("${light1_entity}", (uint8_t)(x / 255.0f * 100.0f));'
+
+  - platform: homeassistant
+    id: light2_brightness_sensor
+    entity_id: "${light2_entity}"
+    attribute: brightness
+    on_value:
+      then:
+        - lambda: 'id(knob).on_light_brightness("${light2_entity}", (uint8_t)(x / 255.0f * 100.0f));'
+
+  - platform: homeassistant
+    id: light3_brightness_sensor
+    entity_id: "${light3_entity}"
+    attribute: brightness
+    on_value:
+      then:
+        - lambda: 'id(knob).on_light_brightness("${light3_entity}", (uint8_t)(x / 255.0f * 100.0f));'
+
+  - platform: homeassistant
+    id: light4_brightness_sensor
+    entity_id: "${light4_entity}"
+    attribute: brightness
+    on_value:
+      then:
+        - lambda: 'id(knob).on_light_brightness("${light4_entity}", (uint8_t)(x / 255.0f * 100.0f));'
 
   # ── MEATER sensors ── uncomment when meater  used: true ──────────────────────
   # - platform: homeassistant
@@ -228,7 +387,7 @@ sensor:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# BINARY SENSORS — Main button (GPIO42)
+# BINARY SENSORS — Button + light on/off state from HA
 # ─────────────────────────────────────────────────────────────────────────────
 binary_sensor:
   - platform: gpio
@@ -250,6 +409,8 @@ binary_sensor:
                 id(action_play_playlist).execute();
               } else if (id(knob).is_sonos_now_playing() || id(knob).is_sonos_volume()) {
                 id(action_play_pause).execute();
+              } else if (id(knob).is_light_pending()) {
+                id(push_light_state).execute();
               }
               // In MENU: on_short_press() already handled the selection
               // Meater: read-only display, no action
@@ -260,6 +421,185 @@ binary_sensor:
         then:
           - lambda: 'id(knob).on_long_press();'
           - rtttl.play: "mode:d=32,o=5,b=220:c,e"
+
+  # ── Light on/off state — HA → device ─────────────────────────────────────────
+  - platform: homeassistant
+    id: light1_on_state_sensor
+    entity_id: "${light1_entity}"
+    on_state:
+      then:
+        - lambda: 'id(knob).on_light_on_state("${light1_entity}", x);'
+
+  - platform: homeassistant
+    id: light2_on_state_sensor
+    entity_id: "${light2_entity}"
+    on_state:
+      then:
+        - lambda: 'id(knob).on_light_on_state("${light2_entity}", x);'
+
+  - platform: homeassistant
+    id: light3_on_state_sensor
+    entity_id: "${light3_entity}"
+    on_state:
+      then:
+        - lambda: 'id(knob).on_light_on_state("${light3_entity}", x);'
+
+  - platform: homeassistant
+    id: light4_on_state_sensor
+    entity_id: "${light4_entity}"
+    on_state:
+      then:
+        - lambda: 'id(knob).on_light_on_state("${light4_entity}", x);'
+
+  # ── Timer fired notifications (template binary_sensors) ───────────────────
+  - platform: template
+    name: "Timer 1 Fired"
+    id: timer1_fired
+    lambda: 'return id(knob).is_timer_fired();'
+    on_press:
+      - rtttl.play: "timer:d=8,o=5,b=180:c,e,g,c6,g,e,c"
+      - lambda: 'id(knob).clear_timer_fired();'
+
+  - platform: template
+    name: "Timer 2 Fired"
+    id: timer2_fired
+    lambda: 'return id(knob).is_timer2_fired();'
+    on_press:
+      - rtttl.play: "timer:d=8,o=5,b=180:c,e,g,c6,g,e,c"
+      - lambda: 'id(knob).clear_timer2_fired();'
+
+  - platform: template
+    name: "Alarm 1 Fired"
+    id: alarm1_fired
+    lambda: 'return id(knob).is_alarm_fired();'
+    on_press:
+      - rtttl.play: "alarm:d=4,o=5,b=160:c,c,p,c,c,p,c,c,c,c"
+      - lambda: 'id(knob).clear_alarm_fired();'
+
+  - platform: template
+    name: "Alarm 2 Fired"
+    id: alarm2_fired
+    lambda: 'return id(knob).is_alarm2_fired();'
+    on_press:
+      - rtttl.play: "alarm:d=4,o=5,b=160:c,c,p,c,c,p,c,c,c,c"
+      - lambda: 'id(knob).clear_alarm2_fired();'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NUMBERS — Timer duration and alarm time, settable from Home Assistant
+# ─────────────────────────────────────────────────────────────────────────────
+number:
+  - platform: template
+    name: "Timer 1 Duration"
+    id: timer1_duration
+    min_value: 1
+    max_value: 99
+    step: 1
+    unit_of_measurement: "min"
+    mode: box
+    set_action:
+      lambda: 'id(knob).set_timer_duration((uint32_t)(x * 60));'
+
+  - platform: template
+    name: "Timer 2 Duration"
+    id: timer2_duration
+    min_value: 1
+    max_value: 99
+    step: 1
+    unit_of_measurement: "min"
+    mode: box
+    set_action:
+      lambda: 'id(knob).set_timer2_duration((uint32_t)(x * 60));'
+
+  - platform: template
+    name: "Alarm 1 Hour"
+    id: alarm1_hour
+    min_value: 0
+    max_value: 23
+    step: 1
+    mode: box
+    set_action:
+      lambda: 'id(knob).set_alarm_hour((uint8_t)x);'
+
+  - platform: template
+    name: "Alarm 1 Minute"
+    id: alarm1_minute
+    min_value: 0
+    max_value: 59
+    step: 1
+    mode: box
+    set_action:
+      lambda: 'id(knob).set_alarm_minute((uint8_t)x);'
+
+  - platform: template
+    name: "Alarm 2 Hour"
+    id: alarm2_hour
+    min_value: 0
+    max_value: 23
+    step: 1
+    mode: box
+    set_action:
+      lambda: 'id(knob).set_alarm2_hour((uint8_t)x);'
+
+  - platform: template
+    name: "Alarm 2 Minute"
+    id: alarm2_minute
+    min_value: 0
+    max_value: 59
+    step: 1
+    mode: box
+    set_action:
+      lambda: 'id(knob).set_alarm2_minute((uint8_t)x);'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SWITCHES — Timer run/stop, alarm arm/disarm, count-up start/reset
+# ─────────────────────────────────────────────────────────────────────────────
+switch:
+  - platform: template
+    name: "Timer 1 Running"
+    id: timer1_running
+    turn_on_action:
+      lambda: 'id(knob).start_timer();'
+    turn_off_action:
+      lambda: 'id(knob).stop_timer();'
+    lambda: 'return id(knob).is_timer_running();'
+
+  - platform: template
+    name: "Timer 2 Running"
+    id: timer2_running
+    turn_on_action:
+      lambda: 'id(knob).start_timer2();'
+    turn_off_action:
+      lambda: 'id(knob).stop_timer2();'
+    lambda: 'return id(knob).is_timer2_running();'
+
+  - platform: template
+    name: "Alarm 1 Armed"
+    id: alarm1_armed
+    turn_on_action:
+      lambda: 'id(knob).arm_alarm();'
+    turn_off_action:
+      lambda: 'id(knob).disarm_alarm();'
+    lambda: 'return id(knob).is_alarm_armed();'
+
+  - platform: template
+    name: "Alarm 2 Armed"
+    id: alarm2_armed
+    turn_on_action:
+      lambda: 'id(knob).arm_alarm2();'
+    turn_off_action:
+      lambda: 'id(knob).disarm_alarm2();'
+    lambda: 'return id(knob).is_alarm2_armed();'
+
+  - platform: template
+    name: "Count Up Running"
+    id: countup_running
+    turn_on_action:
+      lambda: 'id(knob).start_countup();'
+    turn_off_action:
+      lambda: 'id(knob).reset_countup();'
+    lambda: 'return id(knob).is_countup_running();'
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -304,9 +644,7 @@ text_sensor:
     attribute: entity_picture
     on_value:
       then:
-        - lambda: |-
-            if (x.empty()) return;
-            ESP_LOGI("sonos", "Album art URL (not rendered): %s", x.c_str());
+        - lambda: 'if (!x.empty()) id(knob).set_album_art_url(x);'
 
   - platform: homeassistant
     id: ts_player_state
@@ -317,7 +655,7 @@ text_sensor:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SCRIPTS — Sonos HA service calls
+# SCRIPTS — Sonos + light HA service calls
 # ─────────────────────────────────────────────────────────────────────────────
 script:
 
@@ -376,3 +714,30 @@ script:
             entity_id: "${sonos_entity}"
           data_template:
             volume_level: "{{ vol }}"
+
+  # ── Light — device → HA ───────────────────────────────────────────────────
+  # Called after every rotary tick or short press on a light screen.
+  # Reads the pending state from the component and calls the appropriate
+  # light service, then clears the pending flag.
+  - id: push_light_state
+    then:
+      - if:
+          condition:
+            lambda: return id(knob).get_light_on();
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                variables:
+                  entity: !lambda 'return id(knob).get_light_entity();'
+                  brightness: !lambda 'return (int)id(knob).get_light_brightness();'
+                data_template:
+                  entity_id: "{{ entity }}"
+                  brightness_pct: "{{ brightness }}"
+          else:
+            - homeassistant.service:
+                service: light.turn_off
+                variables:
+                  entity: !lambda 'return id(knob).get_light_entity();'
+                data_template:
+                  entity_id: "{{ entity }}"
+      - lambda: 'id(knob).clear_light_pending();'
