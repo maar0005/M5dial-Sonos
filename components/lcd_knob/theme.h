@@ -2,63 +2,84 @@
 #include <cstdint>
 
 // ════════════════════════════════════════════════════════════════════════════
-//  THEME — Nordic Steel
+//  THEME — runtime-switchable design system
 //
-//  Single source of truth for all visual design decisions.
-//  Edit only this file to restyle the entire UI.
+//  All visual design decisions live here. To restyle the entire UI, either:
+//    • Change g_active_theme at runtime (via set_theme() / HA dropdown), or
+//    • Edit a ThemeDef instance in theme.cpp, or
+//    • Add a new ThemeDef in theme.cpp and extend set_theme().
 //
-//  Palette: B&O-inspired. Deep navy-black ground, steel-blue accent.
-//  The blue CNC frame and the display read as one continuous object.
+//  Screen .cpp files use COL_*, FONT_*, ARC_* directly — no changes needed
+//  there when adding or switching themes.
 // ════════════════════════════════════════════════════════════════════════════
 
-namespace esphome {
-namespace lcd_knob {
+// ── Theme definition struct ───────────────────────────────────────────────────
+// Fonts are NOT part of ThemeDef — they are the same across all themes.
+// See FONT_* macros below.
+struct ThemeDef {
+  // Colour palette (RGB565)
+  uint16_t bg;       // background
+  uint16_t accent;   // primary accent / interactive colour
+  uint16_t white;    // primary text
+  uint16_t grey_cc;  // secondary text
+  uint16_t grey_55;  // muted / inactive text
+  uint16_t grey_44;  // dividers, subtle hints
+  uint16_t grey_33;  // arc track background
+  uint16_t black;    // art-overlay / pure black
 
-// ── Colour palette (RGB565) ───────────────────────────────────────────────────
-static constexpr uint16_t COL_BG      = 0x0883;  // #0C1018  deep navy-black
-static constexpr uint16_t COL_ACCENT  = 0x7D79;  // #7AAFC8  steel blue
-static constexpr uint16_t COL_WHITE   = 0xDF5E;  // #DDE8F0  cool white
-static constexpr uint16_t COL_GREY_CC = 0x7495;  // #7090A8  cool mid-slate
-static constexpr uint16_t COL_GREY_55 = 0x2188;  // #243040  dark slate
-static constexpr uint16_t COL_GREY_44 = 0x1906;  // #182030  very dark navy
-static constexpr uint16_t COL_GREY_33 = 0x08C4;  // #0E1820  near-black navy
-static constexpr uint16_t COL_BLACK   = 0x0000;  // #000000  art-overlay black
+  // Arc geometry
+  int   arc_start;       // start angle (degrees)
+  int   arc_end_full;    // arc_start + 270 (full sweep)
+  float arc_sweep;       // total sweep in degrees (270.0)
+  int   arc_outer;       // standard ring outer radius
+  int   arc_inner;       // standard ring inner radius
+  int   arc_vol_outer;   // volume ring outer radius
+  int   arc_vol_inner;   // volume ring inner radius
+  int   arc_deco_outer;  // Sonos decorative ring outer
+  int   arc_deco_inner;  // Sonos decorative ring inner
+  float arc_cap_dist;    // distance from center to cap-dot center
+  int   arc_cap_halo;    // cap-dot dark halo radius
+  int   arc_cap_dot;     // cap-dot bright tip radius
+};
 
-// Alias so existing code using COL_ORANGE compiles unchanged
-static constexpr uint16_t COL_ORANGE  = COL_ACCENT;
+// ── Active theme pointer — switched at runtime ────────────────────────────────
+// Defined in theme.cpp; default = THEME_NORDIC_STEEL.
+// All COL_* and ARC_* macros below dereference this pointer.
+extern const ThemeDef* g_active_theme;
 
-// ── Typography ────────────────────────────────────────────────────────────────
-// Change one line here to refont the entire UI.
-#define FONT_SMALL   (&fonts::FreeSansBold9pt7b)   // labels, hints, status text
-#define FONT_MEDIUM  (&fonts::FreeSansBold12pt7b)  // list items, subtitles
-#define FONT_LARGE   (&fonts::FreeSansBold18pt7b)  // primary values (time, %)
+// ── Colour macros ─────────────────────────────────────────────────────────────
+#define COL_BG       (g_active_theme->bg)
+#define COL_ACCENT   (g_active_theme->accent)
+#define COL_ORANGE   (g_active_theme->accent)   // legacy alias — keeps existing code unchanged
+#define COL_WHITE    (g_active_theme->white)
+#define COL_GREY_CC  (g_active_theme->grey_cc)
+#define COL_GREY_55  (g_active_theme->grey_55)
+#define COL_GREY_44  (g_active_theme->grey_44)
+#define COL_GREY_33  (g_active_theme->grey_33)
+#define COL_BLACK    (g_active_theme->black)
 
-// ── Arc geometry ──────────────────────────────────────────────────────────────
-// 270° sweep with a gap at the bottom. Starts at 135°, full ring ends at 405°.
-static constexpr int   ARC_START      = 135;
-static constexpr int   ARC_END_FULL   = 405;     // ARC_START + 270
-static constexpr float ARC_SWEEP      = 270.0f;
+// ── Typography macros ─────────────────────────────────────────────────────────
+// Fonts are the same across all themes — defined as simple macros here.
+// They expand at the call site (in screen .cpp files) where M5Dial.h is
+// already included, so no display-library include is needed in theme.h.
+#define FONT_SMALL   (&fonts::FreeSansBold9pt7b)
+#define FONT_MEDIUM  (&fonts::FreeSansBold12pt7b)
+#define FONT_LARGE   (&fonts::FreeSansBold18pt7b)
 
-// Standard arc ring — light, timer, meater
-static constexpr int   ARC_OUTER      = 105;
-static constexpr int   ARC_INNER      = 97;
+// ── Arc geometry macros ───────────────────────────────────────────────────────
+#define ARC_START      (g_active_theme->arc_start)
+#define ARC_END_FULL   (g_active_theme->arc_end_full)
+#define ARC_SWEEP      (g_active_theme->arc_sweep)
+#define ARC_OUTER      (g_active_theme->arc_outer)
+#define ARC_INNER      (g_active_theme->arc_inner)
+#define ARC_VOL_OUTER  (g_active_theme->arc_vol_outer)
+#define ARC_VOL_INNER  (g_active_theme->arc_vol_inner)
+#define ARC_DECO_OUTER (g_active_theme->arc_deco_outer)
+#define ARC_DECO_INNER (g_active_theme->arc_deco_inner)
+#define ARC_CAP_DIST   (g_active_theme->arc_cap_dist)
+#define ARC_CAP_HALO   (g_active_theme->arc_cap_halo)
+#define ARC_CAP_DOT    (g_active_theme->arc_cap_dot)
 
-// Volume arc ring — slightly wider for emphasis
-static constexpr int   ARC_VOL_OUTER  = 108;
-static constexpr int   ARC_VOL_INNER  = 96;
-
-// Sonos outer decoration ring
-static constexpr int   ARC_DECO_OUTER = 119;
-static constexpr int   ARC_DECO_INNER = 117;
-
-// Volume cap-dot (needle tip on the arc)
-static constexpr float ARC_CAP_DIST   = 102.0f;  // px from center to cap center
-static constexpr int   ARC_CAP_HALO   = 7;       // dark halo radius
-static constexpr int   ARC_CAP_DOT    = 5;       // bright dot radius
-
-// ── Display geometry ──────────────────────────────────────────────────────────
-static constexpr int CENTER_X         = 120;
-static constexpr int CENTER_Y         = 120;
-
-}  // namespace lcd_knob
-}  // namespace esphome
+// ── Display geometry (never changes — not part of ThemeDef) ──────────────────
+static constexpr int CENTER_X = 120;
+static constexpr int CENTER_Y = 120;
