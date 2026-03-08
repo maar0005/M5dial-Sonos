@@ -49,6 +49,7 @@ class LcdKnob : public Component {
   // ── Global config ──────────────────────────────────────────────────────────
   void set_screen_off_time    (uint32_t ms) { screen_off_time_    = ms; }
   void set_long_press_duration(uint32_t ms) { long_press_duration_ = ms; }
+  void set_theme(const std::string &name);  // e.g. "Nordic Steel", "Original Orange"
 
   // ── Screen declarations — called in order from generated code ─────────────
   void configure_sonos  (const std::string &entity, int volume_step,

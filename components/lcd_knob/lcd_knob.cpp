@@ -10,6 +10,27 @@ namespace lcd_knob {
 static const char *const TAG = "lcd_knob";
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Theme
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Forward declarations for theme instances defined in theme.cpp
+extern const ThemeDef THEME_NORDIC_STEEL;
+extern const ThemeDef THEME_ORIGINAL_ORANGE;
+
+void LcdKnob::set_theme(const std::string &name) {
+  if (name == "Nordic Steel")
+    g_active_theme = &THEME_NORDIC_STEEL;
+  else if (name == "Original Orange")
+    g_active_theme = &THEME_ORIGINAL_ORANGE;
+  // Unknown name: keep current theme unchanged (safe fallback)
+
+  // Mark every screen page dirty so they repaint with the new theme
+  for (auto &grp : groups_)
+    for (auto *s : grp.pages)
+      s->mark_dirty();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Lifecycle
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -627,7 +648,7 @@ void LcdKnob::draw_mode_dots() {
 
   for (int i = 0; i < n; i++) {
     // Dark halo for visibility on top of any background (incl. album art)
-    dsp.fillCircle(x_start + i * spacing, dot_y, dot_r + 1, 0x0000);
+    dsp.fillCircle(x_start + i * spacing, dot_y, dot_r + 1, COL_BLACK);
     uint16_t color = ((size_t)i == g.current_page) ? COL_ORANGE : COL_GREY_CC;
     dsp.fillCircle(x_start + i * spacing, dot_y, dot_r, color);
   }

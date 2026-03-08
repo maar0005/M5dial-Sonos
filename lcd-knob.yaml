@@ -486,6 +486,24 @@ binary_sensor:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# SELECT — Display theme, switchable from Home Assistant
+# Persists across reboots (restore_value: true stores choice in ESP32 NVS flash).
+# To add a new theme: add it to theme.cpp, set_theme() in lcd_knob.cpp, and here.
+# ─────────────────────────────────────────────────────────────────────────────
+select:
+  - platform: template
+    name: "Display Theme"
+    id: display_theme
+    options:
+      - "Nordic Steel"
+      - "Original Orange"
+    initial_option: "Nordic Steel"
+    optimistic: true
+    restore_value: true
+    set_action:
+      - lambda: 'id(knob).set_theme(x);'
+
+# ─────────────────────────────────────────────────────────────────────────────
 # NUMBERS — Timer duration and alarm time, settable from Home Assistant
 # ─────────────────────────────────────────────────────────────────────────────
 number:
