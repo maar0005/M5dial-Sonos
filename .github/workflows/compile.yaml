@@ -23,3 +23,22 @@ jobs:
 
       - name: Validate config
         run: esphome config lcd-knob.yaml
+
+  compile:
+    name: ESPHome compile
+    runs-on: ubuntu-latest
+    needs: validate
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create CI secrets
+        run: |
+          echo 'wifi_ssid: ci-placeholder' > secrets.yaml
+          echo 'wifi_password: ci-placeholder' >> secrets.yaml
+
+      - name: Install ESPHome
+        run: pip install esphome
+
+      - name: Compile firmware
+        run: esphome compile lcd-knob.yaml
